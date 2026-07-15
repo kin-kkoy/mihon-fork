@@ -1,12 +1,14 @@
 name: Fork Build (Debug APK)
 
-# Builds an installable, auto-signed DEBUG APK on every push to a fork/* branch,
-# and on-demand via the "Run workflow" button. Free on public repos.
+# Builds an installable, auto-signed DEBUG APK on demand (Run workflow button)
+# or when an apk-* tag is pushed. Not on every push — use the compile-check
+# workflow for fast feedback; run this when you want an APK to test on-device.
+# Free on public repos.
 on:
-  push:
-    branches:
-      - 'fork/**'
   workflow_dispatch:
+  push:
+    tags:
+      - 'apk-*'
 
 concurrency:
   group: fork-build-${{ github.ref }}

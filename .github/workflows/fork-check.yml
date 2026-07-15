@@ -1,0 +1,37 @@
+name: Fork Compile Check
+
+# Fast feedback loop: compiles the app on every push to a fork/* branch to
+# verify our refactors build, WITHOUT the slow native build + APK packaging.
+# Free on public repos.
+on:
+  push:
+    branches:
+      - 'fork/**'
+  workflow_dispatch:
+
+concurrency:
+  group: fork-check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    name: Compile Debug Kotlin
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version-file: .github/.java-version
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compile app (debug)
+        run: ./gradlew :app:compileDebugKotlin --stacktrace
