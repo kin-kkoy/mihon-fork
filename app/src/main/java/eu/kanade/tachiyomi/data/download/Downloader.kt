@@ -43,6 +43,9 @@ import logcat.LogPriority
 import mihon.core.archive.ZipWriter
 import nl.adaptivity.xmlutil.serialization.XML
 import okhttp3.Response
+import okio.buffer
+import okio.sink
+import okio.source
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNow
@@ -450,13 +453,16 @@ class Downloader(
 
         try {
             // If the image is already downloaded, do nothing. Otherwise download from network
-            val file = when {
+            var file = when {
                 imageFile != null -> imageFile
                 chapterCache.isImageInCache(
                     page.imageUrl!!,
                 ) -> copyImageFromCache(chapterCache.getImageFile(page.imageUrl!!), tmpDir, filename)
                 else -> downloadImage(page, download.source, tmpDir, filename)
             }
+
+            // Optionally re-encode the page to save disk space.
+            file = recompressImageIfNeeded(file, tmpDir, filename)
 
             // When the page is ready, set page path, progress (just in case) and status
             splitTallImageIfNeeded(page, tmpDir)
@@ -470,6 +476,45 @@ class Downloader(
             page.progress = 0
             page.status = Page.State.Error(e)
             notifier.onError(e.message, download.chapter.name, download.manga.title, download.manga.id)
+        }
+    }
+
+    /**
+     * Re-encodes (and optionally downscales) the given page image to save disk space, if the
+     * feature is enabled. The numeric [filename] prefix is preserved so downstream matching
+     * (isDownloadedPageImage / splitTallImageIfNeeded / isDownloadSuccessful) still works.
+     * On any error the original [file] is returned unchanged so a page is never lost.
+     *
+     * @param file the downloaded page image file.
+     * @param tmpDir the temporary directory of the download.
+     * @param filename the numeric `%0Nd` filename prefix (without extension).
+     */
+    private fun recompressImageIfNeeded(file: UniFile, tmpDir: UniFile, filename: String): UniFile {
+        if (!downloadPreferences.recompressDownloadedImages.get()) return file
+
+        return try {
+            val maxDimension = downloadPreferences.recompressMaxDimension.get()
+            val quality = downloadPreferences.recompressQuality.get()
+            val useWebp = downloadPreferences.recompressUseWebp.get()
+
+            val (recompressed, newExt) = file.openInputStream().source().buffer().use { source ->
+                ImageUtil.recompressImage(source, maxDimension, quality, useWebp)
+            } ?: return file
+
+            val newFile = tmpDir.createFile("$filename.$newExt")!!
+            recompressed.use { src ->
+                newFile.openOutputStream().sink().buffer().use { sink ->
+                    sink.writeAll(src)
+                }
+            }
+
+            if (file.name != newFile.name) {
+                file.delete()
+            }
+            newFile
+        } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "Failed to recompress downloaded image, keeping original" }
+            file
         }
     }
 

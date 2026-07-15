@@ -72,6 +72,52 @@ object SettingsDownloadScreen : SearchableSettings {
                 allCategories = allCategories,
             ),
             getDownloadAheadGroup(downloadPreferences = downloadPreferences),
+            getRecompressGroup(downloadPreferences = downloadPreferences),
+        )
+    }
+
+    @Composable
+    private fun getRecompressGroup(
+        downloadPreferences: DownloadPreferences,
+    ): Preference.PreferenceGroup {
+        return Preference.PreferenceGroup(
+            title = "Recompress downloads (save space)",
+            preferenceItems = listOf(
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = downloadPreferences.recompressDownloadedImages,
+                    title = "Recompress downloaded pages",
+                    subtitle = "Re-encode pages to save space (opt-in)",
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = downloadPreferences.recompressUseWebp,
+                    title = "Use WebP",
+                    subtitle = "Off = JPEG",
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = downloadPreferences.recompressQuality,
+                    entries = mapOf(
+                        40 to "40%",
+                        50 to "50%",
+                        60 to "60%",
+                        70 to "70%",
+                        80 to "80%",
+                        90 to "90%",
+                        95 to "95%",
+                    ),
+                    title = "Recompress quality",
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = downloadPreferences.recompressMaxDimension,
+                    entries = mapOf(
+                        0 to "No limit",
+                        1080 to "1080 px",
+                        1440 to "1440 px",
+                        2160 to "2160 px",
+                        3840 to "3840 px",
+                    ),
+                    title = "Max page dimension (downscale)",
+                ),
+            ),
         )
     }
 

@@ -158,6 +158,56 @@ object ImageUtil {
         return output
     }
 
+    /**
+     * Re-encode an image to shrink its on-disk size, optionally downscaling it.
+     *
+     * @param imageSource the source image bytes.
+     * @param maxDimension downscale if the longest side exceeds this; 0 = don't downscale.
+     * @param quality re-encode quality (1-100).
+     * @param useWebp encode as WebP; else JPEG.
+     * @return the re-encoded bytes paired with the new extension ("webp"/"jpg"), or null to
+     * skip re-encoding and keep the original (animated / unknown / undecodable images).
+     */
+    fun recompressImage(
+        imageSource: BufferedSource,
+        maxDimension: Int,
+        quality: Int,
+        useWebp: Boolean,
+    ): Pair<BufferedSource, String>? {
+        // Never touch animated images.
+        if (isAnimatedAndSupported(imageSource.peek())) return null
+        // Skip unknown / undecodable formats.
+        if (findImageType(imageSource.peek().inputStream()) == null) return null
+
+        val bitmap = BitmapFactory.decodeStream(imageSource.inputStream()) ?: return null
+
+        val scaled = if (maxDimension > 0 && max(bitmap.width, bitmap.height) > maxDimension) {
+            val ratio = maxDimension.toFloat() / max(bitmap.width, bitmap.height)
+            val newWidth = (bitmap.width * ratio).toInt().coerceAtLeast(1)
+            val newHeight = (bitmap.height * ratio).toInt().coerceAtLeast(1)
+            Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+        } else {
+            bitmap
+        }
+
+        val format = if (useWebp) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Bitmap.CompressFormat.WEBP_LOSSY
+            } else {
+                @Suppress("DEPRECATION")
+                Bitmap.CompressFormat.WEBP
+            }
+        } else {
+            Bitmap.CompressFormat.JPEG
+        }
+
+        val buffer = Buffer()
+        scaled.compress(format, quality.coerceIn(1, 100), buffer.outputStream())
+
+        val extension = if (useWebp) "webp" else "jpg"
+        return buffer to extension
+    }
+
     private fun rotateBitMap(bitmap: Bitmap, degrees: Float): Bitmap {
         val matrix = Matrix().apply { postRotate(degrees) }
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)

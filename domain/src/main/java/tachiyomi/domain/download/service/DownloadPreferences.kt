@@ -69,6 +69,24 @@ class DownloadPreferences(
      */
     val maxDownloadSizeBytes: Preference<Long> = preferenceStore.getLong("max_download_size_bytes", 0L)
 
+    /**
+     * When enabled, each downloaded page image is decoded, optionally downscaled and
+     * re-encoded (WebP or JPEG) to shrink its on-disk size. Default OFF.
+     */
+    val recompressDownloadedImages: Preference<Boolean> = preferenceStore.getBoolean(
+        "recompress_downloaded_images",
+        false,
+    )
+
+    /** Maximum page dimension (longest side) before downscaling. 0 = no downscale. */
+    val recompressMaxDimension: Preference<Int> = preferenceStore.getInt("recompress_max_dimension", 0)
+
+    /** Re-encode quality (1-100). */
+    val recompressQuality: Preference<Int> = preferenceStore.getInt("recompress_quality", 80)
+
+    /** Use WebP for re-encoding; else JPEG. */
+    val recompressUseWebp: Preference<Boolean> = preferenceStore.getBoolean("recompress_use_webp", true)
+
     companion object {
         private const val REMOVE_EXCLUDE_CATEGORIES_PREF_KEY = "remove_exclude_categories"
         private const val DOWNLOAD_NEW_CATEGORIES_PREF_KEY = "download_new_categories"
