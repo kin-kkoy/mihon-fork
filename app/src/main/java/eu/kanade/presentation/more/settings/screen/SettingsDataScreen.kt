@@ -45,6 +45,7 @@ import com.hippo.unifile.UniFile
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.data.CreateBackupScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
+import eu.kanade.presentation.more.settings.screen.data.StorageDashboardScreen
 import eu.kanade.presentation.more.settings.screen.data.StorageInfo
 import eu.kanade.presentation.more.settings.widget.BasePreferenceWidget
 import eu.kanade.presentation.more.settings.widget.PrefsHorizontalPadding
@@ -65,6 +66,7 @@ import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.backup.service.BackupPreferences
+import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.model.Manga
@@ -100,10 +102,17 @@ object SettingsDataScreen : SearchableSettings {
     override fun getPreferences(): List<Preference> {
         val backupPreferences = Injekt.get<BackupPreferences>()
         val storagePreferences = Injekt.get<StoragePreferences>()
+        val navigator = LocalNavigator.currentOrThrow
 
         return listOf(
             getStorageLocationPref(storagePreferences = storagePreferences),
             Preference.PreferenceItem.InfoPreference(stringResource(MR.strings.pref_storage_location_info)),
+
+            Preference.PreferenceItem.TextPreference(
+                title = "Storage dashboard",
+                subtitle = "See real on-disk sizes of each storage bucket and clear them",
+                onClick = { navigator.push(StorageDashboardScreen()) },
+            ),
 
             getBackupAndRestoreGroup(backupPreferences = backupPreferences),
             getDataGroup(),
@@ -280,6 +289,7 @@ object SettingsDataScreen : SearchableSettings {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
         val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
+        val downloadPreferences = remember { Injekt.get<DownloadPreferences>() }
 
         val chapterCache = remember { Injekt.get<ChapterCache>() }
         var cacheReadableSizeSema by remember { mutableIntStateOf(0) }
@@ -321,6 +331,11 @@ object SettingsDataScreen : SearchableSettings {
                 Preference.PreferenceItem.SwitchPreference(
                     preference = libraryPreferences.autoClearChapterCache,
                     title = stringResource(MR.strings.pref_auto_clear_chapter_cache),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = downloadPreferences.cleanupOrphanedDownloads,
+                    title = "Auto-remove leftover temp downloads",
+                    subtitle = "Deletes orphaned *_tmp folders from interrupted downloads",
                 ),
             ),
         )
