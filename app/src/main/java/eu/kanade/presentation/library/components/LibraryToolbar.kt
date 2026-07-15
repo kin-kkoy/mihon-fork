@@ -3,9 +3,13 @@ package eu.kanade.presentation.library.components
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FlipToBack
 import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,6 +40,8 @@ fun LibraryToolbar(
     onClickRefresh: () -> Unit,
     onClickGlobalUpdate: () -> Unit,
     onClickOpenRandomManga: () -> Unit,
+    otherSideMode: Boolean,
+    onClickOtherSide: () -> Unit,
     searchQuery: String?,
     onSearchQueryChange: (String?) -> Unit,
     scrollBehavior: TopAppBarScrollBehavior?,
@@ -55,6 +61,8 @@ fun LibraryToolbar(
         onClickRefresh = onClickRefresh,
         onClickGlobalUpdate = onClickGlobalUpdate,
         onClickOpenRandomManga = onClickOpenRandomManga,
+        otherSideMode = otherSideMode,
+        onClickOtherSide = onClickOtherSide,
         scrollBehavior = scrollBehavior,
     )
 }
@@ -69,6 +77,8 @@ private fun LibraryRegularToolbar(
     onClickRefresh: () -> Unit,
     onClickGlobalUpdate: () -> Unit,
     onClickOpenRandomManga: () -> Unit,
+    otherSideMode: Boolean,
+    onClickOtherSide: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior?,
 ) {
     val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
@@ -86,6 +96,13 @@ private fun LibraryRegularToolbar(
                         text = "${title.numberOfManga}",
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = pillAlpha),
                         fontSize = 14.sp,
+                    )
+                }
+                IconButton(onClick = onClickOtherSide) {
+                    Icon(
+                        imageVector = if (otherSideMode) Icons.Filled.DarkMode else Icons.Outlined.DarkMode,
+                        contentDescription = "OtherSide",
+                        tint = if (otherSideMode) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                     )
                 }
             }

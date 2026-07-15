@@ -66,6 +66,8 @@ class LibraryPreferences(
         emptySet(),
     )
 
+    val otherSideMangaIds: Preference<Set<String>> = preferenceStore.getStringSet("otherside_manga_ids", emptySet())
+
     // region Filter
 
     val filterDownloaded: Preference<TriState> = preferenceStore.getEnum(

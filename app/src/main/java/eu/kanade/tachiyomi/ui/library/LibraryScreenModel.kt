@@ -22,6 +22,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.chapter.getNextUnread
 import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -78,15 +79,38 @@ class LibraryScreenModel(
     private val downloadCache: DownloadCache = Injekt.get(),
 ) : StateScreenModel<LibraryScreenModel.State>(State()) {
 
+    // OtherSide session mode: starts hidden each launch.
+    private val otherSideMode = MutableStateFlow(false)
+
     init {
         mutableState.update { state ->
             state.copy(activeCategoryIndex = libraryPreferences.lastUsedCategory.get())
         }
+        // Hides OtherSide-flagged manga in normal mode; shows only them in OtherSide mode.
+        val filteredFavoritesFlow = combine(
+            getFavoritesFlow(),
+            otherSideMode,
+            libraryPreferences.otherSideMangaIds.changes(),
+        ) { favs, mode, ids ->
+            val set = ids.mapNotNull { it.toLongOrNull() }.toSet()
+            if (mode) {
+                favs.filter { it.libraryManga.manga.id in set }
+            } else {
+                favs.filter { it.libraryManga.manga.id !in set }
+            }
+        }
+
+        screenModelScope.launchIO {
+            otherSideMode.collectLatest { mode ->
+                mutableState.update { state -> state.copy(otherSideMode = mode) }
+            }
+        }
+
         screenModelScope.launchIO {
             combine(
                 state.map { it.searchQuery }.distinctUntilChanged().debounce(0.25.seconds),
                 getCategories.subscribe(),
-                getFavoritesFlow(),
+                filteredFavoritesFlow,
                 getLibraryItemPreferencesFlow(),
             ) { searchQuery, categories, favorites, itemPreferences ->
                 val showSystemCategory = favorites.any { it.libraryManga.categories.contains(0) }
@@ -536,6 +560,32 @@ class LibraryScreenModel(
         mutableState.update { it.copy(dialog = Dialog.SettingsSheet) }
     }
 
+    /**
+     * Toggles the Library between normal mode and OtherSide (hidden second shelf) mode.
+     */
+    fun toggleOtherSide() {
+        otherSideMode.update { !it }
+    }
+
+    /**
+     * Adds/removes the currently selected manga to/from OtherSide, then clears the selection.
+     * If any selected manga is not yet flagged, all become flagged; otherwise all are unflagged.
+     */
+    fun toggleOtherSideForSelection() {
+        val selection = state.value.selection
+        if (selection.isEmpty()) return
+        val current = libraryPreferences.otherSideMangaIds.get()
+        val selectionStrings = selection.map { it.toString() }.toSet()
+        val allFlagged = selectionStrings.all { it in current }
+        val updated = if (allFlagged) {
+            current - selectionStrings
+        } else {
+            current + selectionStrings
+        }
+        libraryPreferences.otherSideMangaIds.set(updated)
+        clearSelection()
+    }
+
     private var lastSelectionCategory: Long? = null
 
     fun clearSelection() {
@@ -699,6 +749,7 @@ class LibraryScreenModel(
         val showMangaCount: Boolean = false,
         val showMangaContinueButton: Boolean = false,
         val dialog: Dialog? = null,
+        val otherSideMode: Boolean = false,
         val libraryData: LibraryData = LibraryData(),
         private val activeCategoryIndex: Int = 0,
         private val groupedFavorites: Map<Category, List</* LibraryItem */ Long>> = emptyMap(),

@@ -4,11 +4,15 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -16,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -61,6 +66,20 @@ import tachiyomi.presentation.core.screens.EmptyScreenAction
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.source.local.isLocal
 
+// Distinct dark-purple color scheme applied to the Library when in OtherSide mode.
+private val OtherSideColorScheme = darkColorScheme(
+    primary = Color(0xFF7030C0),
+    onPrimary = Color.White,
+    secondary = Color(0xFFCDB6FF),
+    onSecondary = Color.White,
+    tertiary = Color(0xFFCDB6FF),
+    background = Color(0xFF0C0820),
+    onBackground = Color.White,
+    surface = Color(0xFF12111D),
+    onSurface = Color.White,
+    surfaceContainerHigh = Color(0xFF1B1830),
+)
+
 data object LibraryTab : Tab {
 
     override val options: TabOptions
@@ -105,6 +124,15 @@ data object LibraryTab : Tab {
             started
         }
 
+        // OtherSide: swap to a distinct dark-purple theme when in OtherSide mode.
+        // Crossfade is used as the transition (see fallback note in the OtherSide feature).
+        // TODO: upgrade to circular reveal
+        Crossfade(
+            targetState = state.otherSideMode,
+            animationSpec = tween(durationMillis = 450),
+            label = "otherSideTheme",
+        ) { otherSide ->
+        val libraryScaffold = @Composable {
         Scaffold(
             topBar = { scrollBehavior ->
                 val title = state.getToolbarTitle(
@@ -134,6 +162,8 @@ data object LibraryTab : Tab {
                             }
                         }
                     },
+                    otherSideMode = state.otherSideMode,
+                    onClickOtherSide = screenModel::toggleOtherSide,
                     searchQuery = state.searchQuery,
                     onSearchQueryChange = screenModel::search,
                     // For scroll overlay when no tab
@@ -154,6 +184,8 @@ data object LibraryTab : Tab {
                         screenModel.clearSelection()
                         navigator.push(MigrationConfigScreen(selection))
                     },
+                    onOtherSideClicked = screenModel::toggleOtherSideForSelection,
+                    otherSideLabel = if (state.otherSideMode) "Remove from OtherSide" else "Move to OtherSide",
                 )
             },
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -215,6 +247,13 @@ data object LibraryTab : Tab {
                         getItemsForCategory = { state.getItemsForCategory(it) },
                     )
                 }
+            }
+        }
+        }
+            if (otherSide) {
+                MaterialTheme(colorScheme = OtherSideColorScheme) { libraryScaffold() }
+            } else {
+                libraryScaffold()
             }
         }
 
