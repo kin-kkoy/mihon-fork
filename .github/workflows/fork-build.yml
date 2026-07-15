@@ -1,0 +1,45 @@
+name: Fork Build (Debug APK)
+
+# Builds an installable, auto-signed DEBUG APK on every push to a fork/* branch,
+# and on-demand via the "Run workflow" button. Free on public repos.
+on:
+  push:
+    branches:
+      - 'fork/**'
+  workflow_dispatch:
+
+concurrency:
+  group: fork-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Debug APK
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version-file: .github/.java-version
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihon-fork-debug-${{ github.sha }}
+          # Uploads per-ABI APKs + a universal one. Most phones use arm64-v8a;
+          # the universal APK installs on any device if unsure.
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
