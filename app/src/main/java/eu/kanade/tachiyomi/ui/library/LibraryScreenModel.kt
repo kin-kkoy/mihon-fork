@@ -17,7 +17,6 @@ import eu.kanade.presentation.manga.DownloadAction
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
-import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.chapter.getNextUnread
@@ -28,8 +27,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.dropWhile
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -58,8 +55,6 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.source.service.SourceManager
-import tachiyomi.domain.track.interactor.GetTracksPerManga
-import tachiyomi.domain.track.model.Track
 import tachiyomi.source.local.isLocal
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -69,7 +64,6 @@ import kotlin.time.Duration.Companion.seconds
 class LibraryScreenModel(
     private val getLibraryManga: GetLibraryManga = Injekt.get(),
     private val getCategories: GetCategories = Injekt.get(),
-    private val getTracksPerManga: GetTracksPerManga = Injekt.get(),
     private val getNextChapters: GetNextChapters = Injekt.get(),
     private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get(),
     private val getBookmarkedChaptersByMangaId: GetBookmarkedChaptersByMangaId = Injekt.get(),
@@ -82,7 +76,6 @@ class LibraryScreenModel(
     private val sourceManager: SourceManager = Injekt.get(),
     private val downloadManager: DownloadManager = Injekt.get(),
     private val downloadCache: DownloadCache = Injekt.get(),
-    private val trackerManager: TrackerManager = Injekt.get(),
 ) : StateScreenModel<LibraryScreenModel.State>(State()) {
 
     init {
@@ -94,12 +87,11 @@ class LibraryScreenModel(
                 state.map { it.searchQuery }.distinctUntilChanged().debounce(0.25.seconds),
                 getCategories.subscribe(),
                 getFavoritesFlow(),
-                combine(getTracksPerManga.subscribe(), getTrackingFiltersFlow(), ::Pair),
                 getLibraryItemPreferencesFlow(),
-            ) { searchQuery, categories, favorites, (tracksMap, trackingFilters), itemPreferences ->
+            ) { searchQuery, categories, favorites, itemPreferences ->
                 val showSystemCategory = favorites.any { it.libraryManga.categories.contains(0) }
                 val filteredFavorites = favorites
-                    .applyFilters(tracksMap, trackingFilters, itemPreferences)
+                    .applyFilters(itemPreferences)
                     .let { if (searchQuery == null) it else it.filter { m -> m.matches(searchQuery, sourceManager) } }
 
                 LibraryData(
@@ -107,8 +99,6 @@ class LibraryScreenModel(
                     showSystemCategory = showSystemCategory,
                     categories = categories,
                     favorites = filteredFavorites,
-                    tracksMap = tracksMap,
-                    loggedInTrackerIds = trackingFilters.keys,
                 )
             }
                 .distinctUntilChanged()
@@ -127,7 +117,7 @@ class LibraryScreenModel(
                 .map { data ->
                     data.favorites
                         .applyGrouping(data.categories, data.showSystemCategory)
-                        .applySort(data.favoritesById, data.tracksMap, data.loggedInTrackerIds)
+                        .applySort(data.favoritesById)
                 }
                 .collectLatest {
                     mutableState.update { state ->
@@ -155,21 +145,18 @@ class LibraryScreenModel(
             }
             .launchIn(screenModelScope)
 
-        combine(
-            getLibraryItemPreferencesFlow(),
-            getTrackingFiltersFlow(),
-        ) { prefs, trackFilters ->
-            listOf(
-                prefs.filterDownloaded,
-                prefs.filterUnread,
-                prefs.filterStarted,
-                prefs.filterBookmarked,
-                prefs.filterCompleted,
-                prefs.filterIntervalCustom,
-                *trackFilters.values.toTypedArray(),
-            )
-                .any { it != TriState.DISABLED }
-        }
+        getLibraryItemPreferencesFlow()
+            .map { prefs ->
+                listOf(
+                    prefs.filterDownloaded,
+                    prefs.filterUnread,
+                    prefs.filterStarted,
+                    prefs.filterBookmarked,
+                    prefs.filterCompleted,
+                    prefs.filterIntervalCustom,
+                )
+                    .any { it != TriState.DISABLED }
+            }
             .distinctUntilChanged()
             .onEach {
                 mutableState.update { state ->
@@ -180,8 +167,6 @@ class LibraryScreenModel(
     }
 
     private fun List<LibraryItem>.applyFilters(
-        trackMap: Map<Long, List<Track>>,
-        trackingFilter: Map<Long, TriState>,
         preferences: ItemPreferences,
     ): List<LibraryItem> {
         val downloadedOnly = preferences.globalFilterDownloaded
@@ -192,12 +177,6 @@ class LibraryScreenModel(
         val filterBookmarked = preferences.filterBookmarked
         val filterCompleted = preferences.filterCompleted
         val filterIntervalCustom = preferences.filterIntervalCustom
-
-        val isNotLoggedInAnyTrack = trackingFilter.isEmpty()
-
-        val excludedTracks = trackingFilter.mapNotNull { if (it.value == TriState.ENABLED_NOT) it.key else null }
-        val includedTracks = trackingFilter.mapNotNull { if (it.value == TriState.ENABLED_IS) it.key else null }
-        val trackFiltersIsIgnored = includedTracks.isEmpty() && excludedTracks.isEmpty()
 
         val filterFnDownloaded: (LibraryItem) -> Boolean = {
             applyFilter(filterDownloaded) { it.isLocal || it.downloadCount > 0 }
@@ -227,25 +206,13 @@ class LibraryScreenModel(
             }
         }
 
-        val filterFnTracking: (LibraryItem) -> Boolean = tracking@{ item ->
-            if (isNotLoggedInAnyTrack || trackFiltersIsIgnored) return@tracking true
-
-            val mangaTracks = trackMap[item.id].orEmpty().map { it.trackerId }
-
-            val isExcluded = excludedTracks.isNotEmpty() && mangaTracks.fastAny { it in excludedTracks }
-            val isIncluded = includedTracks.isEmpty() || mangaTracks.fastAny { it in includedTracks }
-
-            !isExcluded && isIncluded
-        }
-
         return fastFilter {
             filterFnDownloaded(it) &&
                 filterFnUnread(it) &&
                 filterFnStarted(it) &&
                 filterFnBookmarked(it) &&
                 filterFnCompleted(it) &&
-                filterFnIntervalCustom(it) &&
-                filterFnTracking(it)
+                filterFnIntervalCustom(it)
         }
     }
 
@@ -265,27 +232,11 @@ class LibraryScreenModel(
 
     private fun Map<Category, List</* LibraryItem */ Long>>.applySort(
         favoritesById: Map<Long, LibraryItem>,
-        trackMap: Map<Long, List<Track>>,
-        loggedInTrackerIds: Set<Long>,
     ): Map<Category, List</* LibraryItem */ Long>> {
         val sortAlphabetically: (LibraryItem, LibraryItem) -> Int = { manga1, manga2 ->
             val title1 = manga1.libraryManga.manga.title.lowercase()
             val title2 = manga2.libraryManga.manga.title.lowercase()
             title1.compareToWithCollator(title2)
-        }
-
-        val defaultTrackerScoreSortValue = -1.0
-        val trackerScores by lazy {
-            val trackerMap = trackerManager.getAll(loggedInTrackerIds).associateBy { e -> e.id }
-            trackMap.mapValues { entry ->
-                when {
-                    entry.value.isEmpty() -> null
-                    else ->
-                        entry.value
-                            .mapNotNull { trackerMap[it.trackerId]?.get10PointScore(it) }
-                            .average()
-                }
-            }
         }
 
         fun LibrarySort.comparator(): Comparator<LibraryItem> = Comparator { manga1, manga2 ->
@@ -319,9 +270,7 @@ class LibraryScreenModel(
                     manga1.libraryManga.manga.dateAdded.compareTo(manga2.libraryManga.manga.dateAdded)
                 }
                 LibrarySort.Type.TrackerMean -> {
-                    val item1Score = trackerScores[manga1.id] ?: defaultTrackerScoreSortValue
-                    val item2Score = trackerScores[manga2.id] ?: defaultTrackerScoreSortValue
-                    item1Score.compareTo(item2Score)
+                    0
                 }
                 LibrarySort.Type.Random -> {
                     error("Why Are We Still Here? Just To Suffer?")
@@ -412,24 +361,6 @@ class LibraryScreenModel(
                         },
                     ),
                 )
-            }
-        }
-    }
-
-    /**
-     * Flow of tracking filter preferences
-     *
-     * @return map of track id with the filter value
-     */
-    private fun getTrackingFiltersFlow(): Flow<Map<Long, TriState>> {
-        return trackerManager.loggedInTrackersFlow().flatMapLatest { loggedInTrackers ->
-            if (loggedInTrackers.isEmpty()) {
-                flowOf(emptyMap())
-            } else {
-                val filterFlows = loggedInTrackers.map { tracker ->
-                    libraryPreferences.filterTracking(tracker.id.toInt()).changes().map { tracker.id to it }
-                }
-                combine(filterFlows) { it.toMap() }
             }
         }
     }
@@ -753,8 +684,6 @@ class LibraryScreenModel(
         val showSystemCategory: Boolean = false,
         val categories: List<Category> = emptyList(),
         val favorites: List<LibraryItem> = emptyList(),
-        val tracksMap: Map</* Manga */ Long, List<Track>> = emptyMap(),
-        val loggedInTrackerIds: Set<Long> = emptySet(),
     ) {
         val favoritesById by lazy { favorites.associateBy { it.id } }
     }

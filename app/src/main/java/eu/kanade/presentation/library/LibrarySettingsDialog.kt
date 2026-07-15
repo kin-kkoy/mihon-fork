@@ -124,33 +124,6 @@ private fun ColumnScope.FilterPage(
             onClick = { screenModel.toggleFilter(LibraryPreferences::filterIntervalCustom) },
         )
     }
-
-    val trackers by screenModel.trackersFlow.collectAsState()
-    when (trackers.size) {
-        0 -> {
-            // No trackers
-        }
-        1 -> {
-            val service = trackers[0]
-            val filterTracker by screenModel.libraryPreferences.filterTracking(service.id.toInt()).collectAsState()
-            TriStateItem(
-                label = stringResource(MR.strings.action_filter_tracked),
-                state = filterTracker,
-                onClick = { screenModel.toggleTracker(service.id.toInt()) },
-            )
-        }
-        else -> {
-            HeadingItem(MR.strings.action_filter_tracked)
-            trackers.map { service ->
-                val filterTracker by screenModel.libraryPreferences.filterTracking(service.id.toInt()).collectAsState()
-                TriStateItem(
-                    label = service.name,
-                    state = filterTracker,
-                    onClick = { screenModel.toggleTracker(service.id.toInt()) },
-                )
-            }
-        }
-    }
 }
 
 @Composable
@@ -158,17 +131,11 @@ private fun ColumnScope.SortPage(
     category: Category?,
     screenModel: LibrarySettingsScreenModel,
 ) {
-    val trackers by screenModel.trackersFlow.collectAsState()
     val sortingMode = category.sort.type
     val sortDescending = !category.sort.isAscending
 
-    val options = remember(trackers.isEmpty()) {
-        val trackerMeanPair = if (trackers.isNotEmpty()) {
-            MR.strings.action_sort_tracker_score to LibrarySort.Type.TrackerMean
-        } else {
-            null
-        }
-        listOfNotNull(
+    val options = remember {
+        listOf(
             MR.strings.action_sort_alpha to LibrarySort.Type.Alphabetical,
             MR.strings.action_sort_total to LibrarySort.Type.TotalChapters,
             MR.strings.action_sort_last_read to LibrarySort.Type.LastRead,
@@ -177,7 +144,6 @@ private fun ColumnScope.SortPage(
             MR.strings.action_sort_latest_chapter to LibrarySort.Type.LatestChapter,
             MR.strings.action_sort_chapter_fetch_date to LibrarySort.Type.ChapterFetchDate,
             MR.strings.action_sort_date_added to LibrarySort.Type.DateAdded,
-            trackerMeanPair,
             MR.strings.action_sort_random to LibrarySort.Type.Random,
         )
     }

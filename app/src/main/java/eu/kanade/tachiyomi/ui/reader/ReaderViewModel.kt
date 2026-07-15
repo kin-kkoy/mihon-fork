@@ -13,8 +13,6 @@ import eu.kanade.domain.manga.interactor.SetMangaViewerFlags
 import eu.kanade.domain.manga.model.readerOrientation
 import eu.kanade.domain.manga.model.readingMode
 import eu.kanade.domain.source.interactor.GetIncognitoState
-import eu.kanade.domain.track.interactor.TrackChapter
-import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.tachiyomi.data.database.models.toDomainChapter
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.DownloadProvider
@@ -91,8 +89,6 @@ class ReaderViewModel @JvmOverloads constructor(
     val readerPreferences: ReaderPreferences = Injekt.get(),
     private val basePreferences: BasePreferences = Injekt.get(),
     private val downloadPreferences: DownloadPreferences = Injekt.get(),
-    private val trackPreferences: TrackPreferences = Injekt.get(),
-    private val trackChapter: TrackChapter = Injekt.get(),
     private val getManga: GetManga = Injekt.get(),
     private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get(),
     private val getNextChapters: GetNextChapters = Injekt.get(),
@@ -559,7 +555,6 @@ class ReaderViewModel @JvmOverloads constructor(
 
     private suspend fun updateChapterProgressOnComplete(readerChapter: ReaderChapter) {
         readerChapter.chapter.read = true
-        updateTrackChapterRead(readerChapter)
         deleteChapterIfNeeded(readerChapter)
 
         val markDuplicateAsRead = libraryPreferences.markDuplicateReadChapterAsRead.get()
@@ -903,22 +898,6 @@ class ReaderViewModel @JvmOverloads constructor(
     sealed interface SaveImageResult {
         class Success(val uri: Uri) : SaveImageResult
         class Error(val error: Throwable) : SaveImageResult
-    }
-
-    /**
-     * Starts the service that updates the last chapter read in sync services. This operation
-     * will run in a background thread and errors are ignored.
-     */
-    private fun updateTrackChapterRead(readerChapter: ReaderChapter) {
-        if (incognitoMode) return
-        if (!trackPreferences.autoUpdateTrack.get()) return
-
-        val manga = manga ?: return
-        val context = Injekt.get<Application>()
-
-        viewModelScope.launchNonCancellable {
-            trackChapter.await(context, manga.id, readerChapter.chapter.chapter_number.toDouble())
-        }
     }
 
     /**
