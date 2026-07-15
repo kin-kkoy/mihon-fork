@@ -138,7 +138,7 @@ data object LibraryTab : Tab {
             }
         }
 
-        val onToggleOtherSide = {
+        val onToggleOtherSide: () -> Unit = {
             // Swap the underlying theme immediately; the overlay wipes over the change.
             screenModel.toggleOtherSide()
             revealTrigger++
