@@ -81,6 +81,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
 
+            // Distinct app id so this fork never collides with official Mihon and
+            // keeps a stable identity for updates.
+            applicationIdSuffix = ".fork"
+
             signingConfig = debug.signingConfig
 
             isProfileable = true

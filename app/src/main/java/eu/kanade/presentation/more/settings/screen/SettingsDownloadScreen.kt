@@ -156,7 +156,8 @@ object SettingsDownloadScreen : SearchableSettings {
                         20L * (1L shl 30) to "20 GB",
                         50L * (1L shl 30) to "50 GB",
                     ),
-                    title = "Maximum download size (evicts oldest read chapters)",
+                    title = "Maximum download size",
+                    subtitle = "Caps total download storage; when exceeded, the oldest chapters you've already read are auto-deleted (unread are kept). Currently: %s",
                 ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = downloadPreferences.removeBookmarkedChapters,

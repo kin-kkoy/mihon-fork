@@ -1,8 +1,9 @@
-name: Fork Build (Debug APK)
+name: Fork Build (Release APK)
 
-# Builds an installable, auto-signed DEBUG APK on demand (Run workflow button)
-# or when an apk-* tag is pushed. Not on every push — use the compile-check
-# workflow for fast feedback; run this when you want an APK to test on-device.
+# Builds an optimized, signed RELEASE APK on demand (Run workflow button)
+# or when an apk-* tag is pushed. Release = minified/R8, not debuggable —
+# dramatically faster than a debug build. Signed with a stable key from repo
+# secrets so updates install over each other and keep your library.
 # Free on public repos.
 on:
   workflow_dispatch:
@@ -19,7 +20,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Debug APK
+    name: Build Release APK
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -34,14 +35,20 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Build release APK
+        env:
+          MIHON_GITHUB_RELEASE: "true"
+          storeFileBase64: ${{ secrets.storeFileBase64 }}
+          storePassword: ${{ secrets.storePassword }}
+          keyAlias: ${{ secrets.keyAlias }}
+          keyPassword: ${{ secrets.keyPassword }}
+        run: ./gradlew assembleRelease --stacktrace
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: mihon-fork-debug-${{ github.sha }}
-          # Uploads per-ABI APKs + a universal one. Most phones use arm64-v8a;
+          name: mihon-fork-release-${{ github.sha }}
+          # Per-ABI APKs + a universal one. Most phones use arm64-v8a;
           # the universal APK installs on any device if unsure.
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
