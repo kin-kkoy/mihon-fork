@@ -53,6 +53,15 @@ class DownloadPreferences(
 
     val parallelPageLimit: Preference<Int> = preferenceStore.getInt("download_parallel_page_limit", 5)
 
+    /**
+     * Automatically delete orphaned temporary download folders (`*_tmp`) left
+     * behind by interrupted downloads. These can otherwise silently accumulate.
+     */
+    val cleanupOrphanedDownloads: Preference<Boolean> = preferenceStore.getBoolean(
+        "cleanup_orphaned_downloads",
+        true,
+    )
+
     companion object {
         private const val REMOVE_EXCLUDE_CATEGORIES_PREF_KEY = "remove_exclude_categories"
         private const val DOWNLOAD_NEW_CATEGORIES_PREF_KEY = "download_new_categories"

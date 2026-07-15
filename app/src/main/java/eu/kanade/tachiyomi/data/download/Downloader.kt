@@ -245,6 +245,10 @@ class Downloader(
             }
             if (areAllDownloadsFinished()) {
                 stop()
+                // Sweep any orphaned *_tmp folders left by failed downloads now that the queue is idle.
+                if (downloadPreferences.cleanupOrphanedDownloads.get()) {
+                    TempCacheCleanupJob.startNow(context)
+                }
             }
         } catch (e: Throwable) {
             if (e is CancellationException) throw e

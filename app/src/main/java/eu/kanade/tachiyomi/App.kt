@@ -23,6 +23,8 @@ import coil3.request.allowRgb565
 import coil3.request.crossfade
 import coil3.util.DebugLogger
 import dev.mihon.injekt.patchInjekt
+import eu.kanade.tachiyomi.data.download.TempCacheCleanupJob
+import tachiyomi.domain.download.service.DownloadPreferences
 import eu.kanade.domain.DomainModule
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.ui.UiPreferences
@@ -169,6 +171,11 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         }
 
         initializeMigrator()
+
+        // Clean up orphaned temporary download folders left behind by interrupted downloads.
+        if (Injekt.get<DownloadPreferences>().cleanupOrphanedDownloads.get()) {
+            TempCacheCleanupJob.startNow(this)
+        }
     }
 
     private fun initializeMigrator() {
