@@ -18,6 +18,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.components.AppBar
@@ -42,6 +45,7 @@ fun LibraryToolbar(
     onClickOpenRandomManga: () -> Unit,
     otherSideMode: Boolean,
     onClickOtherSide: () -> Unit,
+    onOtherSideOriginChanged: (Offset) -> Unit,
     searchQuery: String?,
     onSearchQueryChange: (String?) -> Unit,
     scrollBehavior: TopAppBarScrollBehavior?,
@@ -63,6 +67,7 @@ fun LibraryToolbar(
         onClickOpenRandomManga = onClickOpenRandomManga,
         otherSideMode = otherSideMode,
         onClickOtherSide = onClickOtherSide,
+        onOtherSideOriginChanged = onOtherSideOriginChanged,
         scrollBehavior = scrollBehavior,
     )
 }
@@ -79,6 +84,7 @@ private fun LibraryRegularToolbar(
     onClickOpenRandomManga: () -> Unit,
     otherSideMode: Boolean,
     onClickOtherSide: () -> Unit,
+    onOtherSideOriginChanged: (Offset) -> Unit,
     scrollBehavior: TopAppBarScrollBehavior?,
 ) {
     val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
@@ -98,7 +104,12 @@ private fun LibraryRegularToolbar(
                         fontSize = 14.sp,
                     )
                 }
-                IconButton(onClick = onClickOtherSide) {
+                IconButton(
+                    onClick = onClickOtherSide,
+                    modifier = Modifier.onGloballyPositioned {
+                        onOtherSideOriginChanged(it.boundsInWindow().center)
+                    },
+                ) {
                     Icon(
                         imageVector = if (otherSideMode) Icons.Filled.DarkMode else Icons.Outlined.DarkMode,
                         contentDescription = "OtherSide",

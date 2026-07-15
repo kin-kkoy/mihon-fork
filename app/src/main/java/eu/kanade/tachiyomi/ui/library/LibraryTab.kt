@@ -4,8 +4,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
@@ -17,10 +20,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -111,6 +122,28 @@ data object LibraryTab : Tab {
 
         val snackbarHostState = remember { SnackbarHostState() }
 
+        // OtherSide circular-reveal state.
+        var revealOrigin by remember { mutableStateOf<Offset?>(null) }
+        var revealTrigger by remember { mutableIntStateOf(0) }
+        var revealing by remember { mutableStateOf(false) }
+        val revealProgress = remember { Animatable(0f) }
+        val normalBackground = MaterialTheme.colorScheme.background
+
+        LaunchedEffect(revealTrigger) {
+            if (revealTrigger > 0) {
+                revealing = true
+                revealProgress.snapTo(0f)
+                revealProgress.animateTo(1f, animationSpec = tween(durationMillis = 500))
+                revealing = false
+            }
+        }
+
+        val onToggleOtherSide = {
+            // Swap the underlying theme immediately; the overlay wipes over the change.
+            screenModel.toggleOtherSide()
+            revealTrigger++
+        }
+
         val onClickRefresh: (Category?) -> Boolean = { category ->
             val started = LibraryUpdateJob.startNow(context, category)
             scope.launch {
@@ -124,14 +157,8 @@ data object LibraryTab : Tab {
             started
         }
 
-        // OtherSide: swap to a distinct dark-purple theme when in OtherSide mode.
-        // Crossfade is used as the transition (see fallback note in the OtherSide feature).
-        // TODO: upgrade to circular reveal
-        Crossfade(
-            targetState = state.otherSideMode,
-            animationSpec = tween(durationMillis = 450),
-            label = "otherSideTheme",
-        ) { otherSide ->
+        // OtherSide: swap to a distinct dark-purple theme when in OtherSide mode,
+        // with a circular-reveal wipe expanding from the toggle button position.
         val libraryScaffold = @Composable {
         Scaffold(
             topBar = { scrollBehavior ->
@@ -163,7 +190,8 @@ data object LibraryTab : Tab {
                         }
                     },
                     otherSideMode = state.otherSideMode,
-                    onClickOtherSide = screenModel::toggleOtherSide,
+                    onClickOtherSide = onToggleOtherSide,
+                    onOtherSideOriginChanged = { revealOrigin = it },
                     searchQuery = state.searchQuery,
                     onSearchQueryChange = screenModel::search,
                     // For scroll overlay when no tab
@@ -250,10 +278,37 @@ data object LibraryTab : Tab {
             }
         }
         }
-            if (otherSide) {
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (state.otherSideMode) {
                 MaterialTheme(colorScheme = OtherSideColorScheme) { libraryScaffold() }
             } else {
                 libraryScaffold()
+            }
+
+            if (revealing) {
+                // Overlay draws the OUTGOING theme's background everywhere except a growing
+                // circular hole from the toggle position, revealing the already-swapped theme.
+                val overlayColor = if (state.otherSideMode) normalBackground else OtherSideColorScheme.background
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    if (size.minDimension <= 0f) return@Canvas
+                    val origin = revealOrigin ?: Offset(size.width, 0f)
+                    val maxRadius = listOf(
+                        Offset(0f, 0f),
+                        Offset(size.width, 0f),
+                        Offset(0f, size.height),
+                        Offset(size.width, size.height),
+                    ).maxOf { (it - origin).getDistance() }
+                    val radius = revealProgress.value * maxRadius
+                    val path = Path().apply {
+                        addRect(Rect(Offset.Zero, size))
+                        addOval(Rect(center = origin, radius = radius))
+                        fillType = PathFillType.EvenOdd
+                    }
+                    clipPath(path) {
+                        drawRect(color = overlayColor)
+                    }
+                }
             }
         }
 
