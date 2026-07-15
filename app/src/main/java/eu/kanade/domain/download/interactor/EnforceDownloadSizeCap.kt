@@ -1,7 +1,12 @@
 package eu.kanade.domain.download.interactor
 
+import android.content.Context
+import android.text.format.Formatter
+import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.DownloadProvider
+import eu.kanade.tachiyomi.data.notification.Notifications
+import eu.kanade.tachiyomi.util.system.notify
 import logcat.LogPriority
 import tachiyomi.core.common.storage.recursiveSize
 import tachiyomi.core.common.util.lang.withIOContext
@@ -21,6 +26,7 @@ import tachiyomi.domain.storage.service.StorageManager
  * touched, so nothing you still intend to read is lost.
  */
 class EnforceDownloadSizeCap(
+    private val context: Context,
     private val downloadPreferences: DownloadPreferences,
     private val storageManager: StorageManager,
     private val getLibraryManga: GetLibraryManga,
@@ -71,10 +77,25 @@ class EnforceDownloadSizeCap(
 
         if (evicted > 0) {
             logcat(LogPriority.INFO) { "Download size cap exceeded: evicted $evicted read chapter(s)" }
+            notifyEviction(evicted, cap)
         }
         if (total > cap) {
             // Everything left is unread; we never delete unread downloads.
             logcat(LogPriority.INFO) { "Download size still over cap but only unread chapters remain; keeping them" }
+        }
+    }
+
+    private fun notifyEviction(evicted: Int, cap: Long) {
+        try {
+            val capText = Formatter.formatFileSize(context, cap)
+            context.notify(Notifications.ID_DOWNLOAD_SIZE_CAP, Notifications.CHANNEL_COMMON) {
+                setSmallIcon(R.drawable.ic_mihon)
+                setContentTitle("Download size limit reached")
+                setContentText("Deleted $evicted read chapter(s) to stay under your $capText limit.")
+                setAutoCancel(true)
+            }
+        } catch (e: Throwable) {
+            logcat(LogPriority.WARN, e) { "Failed to post download size cap notification" }
         }
     }
 

@@ -1,5 +1,6 @@
 package eu.kanade.domain
 
+import android.app.Application
 import eu.kanade.domain.chapter.interactor.GetAvailableScanlators
 import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.domain.chapter.interactor.SyncChaptersWithSource
@@ -167,7 +168,7 @@ class DomainModule : InjektModule {
         addFactory { GetTotalReadDuration(get()) }
 
         addFactory { DeleteDownload(get(), get()) }
-        addFactory { EnforceDownloadSizeCap(get(), get(), get(), get(), get(), get(), get()) }
+        addFactory { EnforceDownloadSizeCap(get<Application>(), get(), get(), get(), get(), get(), get(), get()) }
 
         addFactory { GetExtensionsByType(get(), get()) }
         addFactory { GetExtensionSources(get()) }
