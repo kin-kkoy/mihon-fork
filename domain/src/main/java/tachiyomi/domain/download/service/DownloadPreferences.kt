@@ -62,6 +62,13 @@ class DownloadPreferences(
         true,
     )
 
+    /**
+     * Maximum total size of downloaded chapters in bytes. When exceeded, the
+     * oldest already-read downloaded chapters are evicted until under the cap.
+     * 0 = unlimited.
+     */
+    val maxDownloadSizeBytes: Preference<Long> = preferenceStore.getLong("max_download_size_bytes", 0L)
+
     companion object {
         private const val REMOVE_EXCLUDE_CATEGORIES_PREF_KEY = "remove_exclude_categories"
         private const val DOWNLOAD_NEW_CATEGORIES_PREF_KEY = "download_new_categories"

@@ -45,13 +45,8 @@ import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.util.secondaryItemAlpha
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import tachiyomi.core.common.storage.recursiveSize
 import java.io.File
-
-/**
- * Recursively sums the size of a [UniFile] tree. UniFile has no built-in size method.
- */
-private fun UniFile.recursiveSize(): Long =
-    if (isDirectory) listFiles().orEmpty().sumOf { it.recursiveSize() } else length()
 
 class StorageDashboardScreen : Screen() {
 

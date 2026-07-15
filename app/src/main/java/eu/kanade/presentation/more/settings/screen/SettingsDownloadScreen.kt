@@ -99,6 +99,19 @@ object SettingsDownloadScreen : SearchableSettings {
                     ),
                     title = stringResource(MR.strings.pref_remove_after_read),
                 ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = downloadPreferences.maxDownloadSizeBytes,
+                    entries = mapOf(
+                        0L to "Unlimited",
+                        1L shl 30 to "1 GB",
+                        2L shl 30 to "2 GB",
+                        5L * (1L shl 30) to "5 GB",
+                        10L * (1L shl 30) to "10 GB",
+                        20L * (1L shl 30) to "20 GB",
+                        50L * (1L shl 30) to "50 GB",
+                    ),
+                    title = "Maximum download size (evicts oldest read chapters)",
+                ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = downloadPreferences.removeBookmarkedChapters,
                     title = stringResource(MR.strings.pref_remove_bookmarked_chapters),

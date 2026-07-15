@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.data.download
 import android.content.Context
 import com.hippo.unifile.UniFile
 import eu.kanade.domain.chapter.model.toSChapter
+import eu.kanade.domain.download.interactor.EnforceDownloadSizeCap
 import eu.kanade.domain.manga.model.getComicInfo
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.download.model.Download
@@ -249,6 +250,9 @@ class Downloader(
                 if (downloadPreferences.cleanupOrphanedDownloads.get()) {
                     TempCacheCleanupJob.startNow(context)
                 }
+                // Evict oldest read chapters if the download size cap is exceeded.
+                // Resolved lazily here to avoid a construction-time dependency cycle.
+                Injekt.get<EnforceDownloadSizeCap>().await()
             }
         } catch (e: Throwable) {
             if (e is CancellationException) throw e
