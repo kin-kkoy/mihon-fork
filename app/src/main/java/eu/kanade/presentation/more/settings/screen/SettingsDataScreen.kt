@@ -29,7 +29,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -45,14 +44,13 @@ import com.hippo.unifile.UniFile
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.data.CreateBackupScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
-import eu.kanade.presentation.more.settings.screen.data.StorageDashboardScreen
 import eu.kanade.presentation.more.settings.screen.data.StorageInfo
+import eu.kanade.presentation.more.settings.screen.data.StorageUsageBreakdown
 import eu.kanade.presentation.more.settings.widget.BasePreferenceWidget
 import eu.kanade.presentation.more.settings.widget.PrefsHorizontalPadding
 import eu.kanade.presentation.util.relativeTimeSpanString
 import eu.kanade.tachiyomi.data.backup.create.BackupCreateJob
 import eu.kanade.tachiyomi.data.backup.restore.BackupRestoreJob
-import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.export.LibraryExporter
 import eu.kanade.tachiyomi.data.export.LibraryExporter.ExportOptions
 import eu.kanade.tachiyomi.util.system.DeviceUtil
@@ -62,8 +60,6 @@ import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.storage.displayablePath
-import tachiyomi.core.common.util.lang.launchNonCancellable
-import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.backup.service.BackupPreferences
 import tachiyomi.domain.download.service.DownloadPreferences
@@ -102,17 +98,10 @@ object SettingsDataScreen : SearchableSettings {
     override fun getPreferences(): List<Preference> {
         val backupPreferences = Injekt.get<BackupPreferences>()
         val storagePreferences = Injekt.get<StoragePreferences>()
-        val navigator = LocalNavigator.currentOrThrow
 
         return listOf(
             getStorageLocationPref(storagePreferences = storagePreferences),
             Preference.PreferenceItem.InfoPreference(stringResource(MR.strings.pref_storage_location_info)),
-
-            Preference.PreferenceItem.TextPreference(
-                title = "Storage dashboard",
-                subtitle = "See real on-disk sizes of each storage bucket and clear them",
-                onClick = { navigator.push(StorageDashboardScreen()) },
-            ),
 
             getBackupAndRestoreGroup(backupPreferences = backupPreferences),
             getDataGroup(),
@@ -286,14 +275,8 @@ object SettingsDataScreen : SearchableSettings {
 
     @Composable
     private fun getDataGroup(): Preference.PreferenceGroup {
-        val context = LocalContext.current
-        val scope = rememberCoroutineScope()
         val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
         val downloadPreferences = remember { Injekt.get<DownloadPreferences>() }
-
-        val chapterCache = remember { Injekt.get<ChapterCache>() }
-        var cacheReadableSizeSema by remember { mutableIntStateOf(0) }
-        val cacheReadableSize = remember(cacheReadableSizeSema) { chapterCache.readableSize }
 
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_storage_usage),
@@ -310,24 +293,18 @@ object SettingsDataScreen : SearchableSettings {
                     )
                 },
 
-                Preference.PreferenceItem.TextPreference(
-                    title = stringResource(MR.strings.pref_clear_chapter_cache),
-                    subtitle = stringResource(MR.strings.used_cache, cacheReadableSize),
-                    onClick = {
-                        scope.launchNonCancellable {
-                            try {
-                                val deletedFiles = chapterCache.clear()
-                                withUIContext {
-                                    context.toast(context.stringResource(MR.strings.cache_deleted, deletedFiles))
-                                    cacheReadableSizeSema++
-                                }
-                            } catch (e: Throwable) {
-                                logcat(LogPriority.ERROR, e)
-                                withUIContext { context.toast(MR.strings.cache_delete_error) }
-                            }
-                        }
-                    },
-                ),
+                Preference.PreferenceItem.CustomPreference(
+                    title = "Storage usage breakdown",
+                ) {
+                    BasePreferenceWidget(
+                        subcomponent = {
+                            StorageUsageBreakdown(
+                                modifier = Modifier.padding(horizontal = PrefsHorizontalPadding),
+                            )
+                        },
+                    )
+                },
+
                 Preference.PreferenceItem.SwitchPreference(
                     preference = libraryPreferences.autoClearChapterCache,
                     title = stringResource(MR.strings.pref_auto_clear_chapter_cache),
