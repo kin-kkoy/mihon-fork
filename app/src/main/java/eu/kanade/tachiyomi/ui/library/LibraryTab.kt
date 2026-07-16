@@ -34,7 +34,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.drawscope.drawLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
