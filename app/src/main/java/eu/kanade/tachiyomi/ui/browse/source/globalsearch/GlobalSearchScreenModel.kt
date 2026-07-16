@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.ui.browse.source.globalsearch
 
-import eu.kanade.tachiyomi.source.Source
+import eu.kanade.domain.source.service.SourcePreferences
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 class GlobalSearchScreenModel(
     initialQuery: String = "",
@@ -10,16 +12,20 @@ class GlobalSearchScreenModel(
     init {
         extensionFilter = initialExtensionFilter
         if (initialQuery.isNotBlank() || !initialExtensionFilter.isNullOrBlank()) {
-            if (extensionFilter != null) {
-                // we're going to use custom extension filter instead
-                setSourceFilter(SourceFilter.All)
-            }
             search()
         }
     }
 
-    override fun getEnabledSources(): List<Source> {
-        return super.getEnabledSources()
-            .filter { state.value.sourceFilter != SourceFilter.PinnedOnly || "${it.id}" in pinnedSources }
+    override fun getInitialSelectedSourceIds(): Set<Long> {
+        // Use Injekt directly instead of a field: this runs during super's init, before this
+        // subclass's own property initializers have executed.
+        val sourcePreferences = Injekt.get<SourcePreferences>()
+        val saved = sourcePreferences.globalSearchSelectedSources.get()
+        // First run (nothing persisted): fall back to the pinned sources so the picker isn't empty.
+        val ids = saved.ifEmpty { sourcePreferences.pinnedSources.get() }
+        return getEnabledSources()
+            .map { it.id }
+            .filter { it.toString() in ids }
+            .toSet()
     }
 }

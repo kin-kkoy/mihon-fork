@@ -64,6 +64,11 @@ class SourcePreferences(
         false,
     )
 
+    val globalSearchSelectedSources: Preference<Set<String>> = preferenceStore.getStringSet(
+        "global_search_selected_sources",
+        emptySet(),
+    )
+
     val migrationSources: Preference<List<Long>> = preferenceStore.getLongArray("migration_sources", emptyList())
 
     val migrationFlags: Preference<Set<MigrationFlag>> = preferenceStore.getObjectFromInt(

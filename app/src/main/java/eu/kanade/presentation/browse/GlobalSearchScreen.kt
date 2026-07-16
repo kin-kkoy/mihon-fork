@@ -13,7 +13,6 @@ import eu.kanade.presentation.browse.components.GlobalSearchToolbar
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SearchItemResult
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SearchScreenModel
-import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SourceFilter
 import eu.kanade.tachiyomi.util.system.LocaleHelper
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -24,7 +23,9 @@ fun GlobalSearchScreen(
     navigateUp: () -> Unit,
     onChangeSearchQuery: (String?) -> Unit,
     onSearch: (String) -> Unit,
-    onChangeSearchFilter: (SourceFilter) -> Unit,
+    onToggleSource: (Source) -> Unit,
+    onSelectAll: () -> Unit,
+    onSelectNone: () -> Unit,
     onToggleResults: () -> Unit,
     getManga: @Composable (Manga) -> State<Manga>,
     onClickSource: (Source) -> Unit,
@@ -41,8 +42,11 @@ fun GlobalSearchScreen(
                 onChangeSearchQuery = onChangeSearchQuery,
                 onSearch = onSearch,
                 hideSourceFilter = false,
-                sourceFilter = state.sourceFilter,
-                onChangeSearchFilter = onChangeSearchFilter,
+                enabledSources = state.enabledSources,
+                selectedSourceIds = state.selectedSourceIds,
+                onToggleSource = onToggleSource,
+                onSelectAll = onSelectAll,
+                onSelectNone = onSelectNone,
                 onlyShowHasResults = state.onlyShowHasResults,
                 onToggleResults = onToggleResults,
                 scrollBehavior = scrollBehavior,

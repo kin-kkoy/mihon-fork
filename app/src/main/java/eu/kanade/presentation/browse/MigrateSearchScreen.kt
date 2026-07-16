@@ -5,7 +5,6 @@ import androidx.compose.runtime.State
 import eu.kanade.presentation.browse.components.GlobalSearchToolbar
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SearchScreenModel
-import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SourceFilter
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.presentation.core.components.material.Scaffold
 
@@ -16,7 +15,6 @@ fun MigrateSearchScreen(
     navigateUp: () -> Unit,
     onChangeSearchQuery: (String?) -> Unit,
     onSearch: (String) -> Unit,
-    onChangeSearchFilter: (SourceFilter) -> Unit,
     onToggleResults: () -> Unit,
     getManga: @Composable (Manga) -> State<Manga>,
     onClickSource: (Source) -> Unit,
@@ -33,8 +31,11 @@ fun MigrateSearchScreen(
                 onChangeSearchQuery = onChangeSearchQuery,
                 onSearch = onSearch,
                 hideSourceFilter = true,
-                sourceFilter = state.sourceFilter,
-                onChangeSearchFilter = onChangeSearchFilter,
+                enabledSources = state.enabledSources,
+                selectedSourceIds = state.selectedSourceIds,
+                onToggleSource = {},
+                onSelectAll = {},
+                onSelectNone = {},
                 onlyShowHasResults = state.onlyShowHasResults,
                 onToggleResults = onToggleResults,
                 scrollBehavior = scrollBehavior,
