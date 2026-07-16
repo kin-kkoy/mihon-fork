@@ -16,8 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
-import eu.kanade.tachiyomi.R
+import eu.kanade.presentation.components.OtherSideToggleButton
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import tachiyomi.domain.category.model.Category
 import tachiyomi.i18n.MR
@@ -57,17 +56,7 @@ fun ReorderableCollectionItemScope.CategoryListItem(
                 modifier = Modifier.weight(1f),
             )
             if (category.id != 0L) {
-                IconButton(onClick = onToggleOtherSide) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_otherside),
-                        contentDescription = "Toggle OtherSide",
-                        tint = if (isOtherSide) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
+                OtherSideToggleButton(active = isOtherSide, onClick = onToggleOtherSide)
             }
             IconButton(onClick = onRename) {
                 Icon(
