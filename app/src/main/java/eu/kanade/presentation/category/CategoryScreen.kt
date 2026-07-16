@@ -36,6 +36,7 @@ fun CategoryScreen(
     onClickRename: (Category) -> Unit,
     onClickDelete: (Category) -> Unit,
     onChangeOrder: (Category, Int) -> Unit,
+    onToggleOtherSide: (Category) -> Unit,
     navigateUp: () -> Unit,
 ) {
     val lazyListState = rememberLazyListState()
@@ -64,11 +65,13 @@ fun CategoryScreen(
 
         CategoryContent(
             categories = state.categories,
+            otherSideCategoryIds = state.otherSideCategoryIds,
             lazyListState = lazyListState,
             paddingValues = paddingValues,
             onClickRename = onClickRename,
             onClickDelete = onClickDelete,
             onChangeOrder = onChangeOrder,
+            onToggleOtherSide = onToggleOtherSide,
         )
     }
 }
@@ -76,11 +79,13 @@ fun CategoryScreen(
 @Composable
 private fun CategoryContent(
     categories: List<Category>,
+    otherSideCategoryIds: Set<String>,
     lazyListState: LazyListState,
     paddingValues: PaddingValues,
     onClickRename: (Category) -> Unit,
     onClickDelete: (Category) -> Unit,
     onChangeOrder: (Category, Int) -> Unit,
+    onToggleOtherSide: (Category) -> Unit,
 ) {
     val categoriesState = remember { categories.toMutableStateList() }
     val reorderableState = rememberReorderableLazyListState(lazyListState, paddingValues) { from, to ->
@@ -112,8 +117,10 @@ private fun CategoryContent(
                 CategoryListItem(
                     modifier = Modifier.animateItem(),
                     category = category,
+                    isOtherSide = category.id.toString() in otherSideCategoryIds,
                     onRename = { onClickRename(category) },
                     onDelete = { onClickDelete(category) },
+                    onToggleOtherSide = { onToggleOtherSide(category) },
                 )
             }
         }

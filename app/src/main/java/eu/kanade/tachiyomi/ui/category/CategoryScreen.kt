@@ -41,6 +41,7 @@ class CategoryScreen : Screen() {
             onClickRename = { screenModel.showDialog(CategoryDialog.Rename(it)) },
             onClickDelete = { screenModel.showDialog(CategoryDialog.Delete(it)) },
             onChangeOrder = screenModel::changeOrder,
+            onToggleOtherSide = screenModel::toggleOtherSide,
             navigateUp = navigator::pop,
         )
 

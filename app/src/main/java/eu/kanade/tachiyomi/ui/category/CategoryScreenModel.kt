@@ -6,6 +6,7 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import dev.icerock.moko.resources.StringResource
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -15,6 +16,7 @@ import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.RenameCategory
 import tachiyomi.domain.category.interactor.ReorderCategory
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -25,6 +27,7 @@ class CategoryScreenModel(
     private val deleteCategory: DeleteCategory = Injekt.get(),
     private val reorderCategory: ReorderCategory = Injekt.get(),
     private val renameCategory: RenameCategory = Injekt.get(),
+    private val libraryPreferences: LibraryPreferences = Injekt.get(),
 ) : StateScreenModel<CategoryScreenState>(CategoryScreenState.Loading) {
 
     private val _events: Channel<CategoryEvent> = Channel()
@@ -32,16 +35,34 @@ class CategoryScreenModel(
 
     init {
         screenModelScope.launch {
-            getCategories.subscribe()
-                .collectLatest { categories ->
-                    mutableState.update {
-                        CategoryScreenState.Success(
-                            categories = categories
-                                .filterNot(Category::isSystemCategory),
-                        )
+            combine(
+                getCategories.subscribe(),
+                libraryPreferences.otherSideCategoryIds.changes(),
+            ) { categories, otherSideIds ->
+                CategoryScreenState.Success(
+                    categories = categories
+                        .filterNot(Category::isSystemCategory),
+                    otherSideCategoryIds = otherSideIds,
+                )
+            }
+                .collectLatest { successState ->
+                    mutableState.update { current ->
+                        when (current) {
+                            CategoryScreenState.Loading -> successState
+                            is CategoryScreenState.Success -> successState.copy(dialog = current.dialog)
+                        }
                     }
                 }
         }
+    }
+
+    fun toggleOtherSide(category: Category) {
+        val pref = libraryPreferences.otherSideCategoryIds
+        val id = category.id.toString()
+        val current = pref.get()
+        pref.set(
+            if (id in current) current - id else current + id,
+        )
     }
 
     fun createCategory(name: String) {
@@ -118,6 +139,7 @@ sealed interface CategoryScreenState {
     @Immutable
     data class Success(
         val categories: List<Category>,
+        val otherSideCategoryIds: Set<String> = emptySet(),
         val dialog: CategoryDialog? = null,
     ) : CategoryScreenState {
 
