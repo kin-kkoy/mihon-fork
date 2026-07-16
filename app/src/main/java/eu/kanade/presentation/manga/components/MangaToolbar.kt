@@ -37,6 +37,8 @@ fun MangaToolbar(
     onClickRefresh: () -> Unit,
     onClickMigrate: (() -> Unit)?,
     onClickEditNotes: () -> Unit,
+    isInOtherSide: Boolean,
+    onOtherSideClicked: () -> Unit,
 
     // For action mode
     actionModeCounter: Int,
@@ -144,6 +146,12 @@ fun MangaToolbar(
                         AppBar.OverflowAction(
                             title = stringResource(MR.strings.action_notes),
                             onClick = onClickEditNotes,
+                        ),
+                    )
+                    add(
+                        AppBar.OverflowAction(
+                            title = if (isInOtherSide) "Remove from OtherSide" else "Add to OtherSide",
+                            onClick = onOtherSideClicked,
                         ),
                     )
                 },
