@@ -15,7 +15,6 @@ import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -81,20 +80,6 @@ import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.EmptyScreenAction
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.source.local.isLocal
-
-// Distinct dark-purple color scheme applied to the Library when in OtherSide mode.
-private val OtherSideColorScheme = darkColorScheme(
-    primary = Color(0xFF7030C0),
-    onPrimary = Color.White,
-    secondary = Color(0xFFCDB6FF),
-    onSecondary = Color.White,
-    tertiary = Color(0xFFCDB6FF),
-    background = Color(0xFF0C0820),
-    onBackground = Color.White,
-    surface = Color(0xFF12111D),
-    onSurface = Color.White,
-    surfaceContainerHigh = Color(0xFF1B1830),
-)
 
 data object LibraryTab : Tab {
 
