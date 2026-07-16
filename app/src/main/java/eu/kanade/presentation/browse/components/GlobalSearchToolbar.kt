@@ -279,10 +279,6 @@ private fun SourcePickerMenu(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
                 ) {
-                    SourceIcon(
-                        source = source,
-                        modifier = Modifier.size(28.dp),
-                    )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = source.name,
