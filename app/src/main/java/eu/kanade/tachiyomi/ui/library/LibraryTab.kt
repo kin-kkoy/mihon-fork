@@ -20,22 +20,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAll
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -123,25 +128,27 @@ data object LibraryTab : Tab {
         val snackbarHostState = remember { SnackbarHostState() }
 
         // OtherSide circular-reveal state.
+        val graphicsLayer = rememberGraphicsLayer()
         var revealOrigin by remember { mutableStateOf<Offset?>(null) }
-        var revealTrigger by remember { mutableIntStateOf(0) }
         var revealing by remember { mutableStateOf(false) }
+        var oldSnapshot by remember { mutableStateOf<ImageBitmap?>(null) }
         val revealProgress = remember { Animatable(0f) }
-        val normalBackground = MaterialTheme.colorScheme.background
-
-        LaunchedEffect(revealTrigger) {
-            if (revealTrigger > 0) {
-                revealing = true
-                revealProgress.snapTo(0f)
-                revealProgress.animateTo(1f, animationSpec = tween(durationMillis = 500))
-                revealing = false
-            }
-        }
 
         val onToggleOtherSide: () -> Unit = {
-            // Swap the underlying theme immediately; the overlay wipes over the change.
-            screenModel.toggleOtherSide()
-            revealTrigger++
+            scope.launch {
+                // Capture the OLD-themed frame, THEN swap the theme, then wipe a growing
+                // circle that reveals the NEW theme underneath the old snapshot.
+                val old = runCatching { graphicsLayer.toImageBitmap() }.getOrNull()
+                screenModel.toggleOtherSide()
+                oldSnapshot = old
+                revealing = old != null
+                if (old != null) {
+                    revealProgress.snapTo(0f)
+                    revealProgress.animateTo(1f, animationSpec = tween(durationMillis = 550))
+                }
+                revealing = false
+                oldSnapshot = null
+            }
         }
 
         val onClickRefresh: (Category?) -> Boolean = { category ->
@@ -280,16 +287,27 @@ data object LibraryTab : Tab {
         }
 
         Box(modifier = Modifier.fillMaxSize()) {
-            if (state.otherSideMode) {
-                MaterialTheme(colorScheme = OtherSideColorScheme) { libraryScaffold() }
-            } else {
-                libraryScaffold()
+            // Continuously record the live (already-themed) Library frame into a graphics layer
+            // so we can snapshot the OLD theme the instant the toggle is tapped.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .drawWithContent {
+                        graphicsLayer.record { this@drawWithContent.drawContent() }
+                        drawLayer(graphicsLayer)
+                    },
+            ) {
+                if (state.otherSideMode) {
+                    MaterialTheme(colorScheme = OtherSideColorScheme) { libraryScaffold() }
+                } else {
+                    libraryScaffold()
+                }
             }
 
-            if (revealing) {
-                // Overlay draws the OUTGOING theme's background everywhere except a growing
-                // circular hole from the toggle position, revealing the already-swapped theme.
-                val overlayColor = if (state.otherSideMode) normalBackground else OtherSideColorScheme.background
+            val snapshot = oldSnapshot
+            if (revealing && snapshot != null) {
+                // Draw the OLD-theme snapshot everywhere EXCEPT inside the growing circle, so the
+                // NEW theme underneath is revealed element-by-element as the edge sweeps past.
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     if (size.minDimension <= 0f) return@Canvas
                     val origin = revealOrigin ?: Offset(size.width, 0f)
@@ -306,7 +324,17 @@ data object LibraryTab : Tab {
                         fillType = PathFillType.EvenOdd
                     }
                     clipPath(path) {
-                        drawRect(color = overlayColor)
+                        drawImage(image = snapshot)
+                    }
+                    // Leading-edge ripple: a faded-white ring at the wavefront.
+                    val ringAlpha = (0.35f * (1f - revealProgress.value)).coerceAtLeast(0f)
+                    if (ringAlpha > 0f && radius > 0f) {
+                        drawCircle(
+                            color = Color.White.copy(alpha = ringAlpha),
+                            radius = radius,
+                            center = origin,
+                            style = Stroke(width = 3.dp.toPx()),
+                        )
                     }
                 }
             }

@@ -1,10 +1,10 @@
 package eu.kanade.presentation.library.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FlipToBack
 import androidx.compose.material.icons.outlined.SelectAll
@@ -21,11 +21,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.SearchToolbar
+import eu.kanade.tachiyomi.R
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.Pill
 import tachiyomi.presentation.core.i18n.stringResource
@@ -106,12 +108,23 @@ private fun LibraryRegularToolbar(
                 }
                 IconButton(
                     onClick = onClickOtherSide,
-                    modifier = Modifier.onGloballyPositioned {
-                        onOtherSideOriginChanged(it.boundsInWindow().center)
-                    },
+                    modifier = Modifier
+                        .onGloballyPositioned {
+                            onOtherSideOriginChanged(it.boundsInWindow().center)
+                        }
+                        .then(
+                            if (otherSideMode) {
+                                Modifier.background(
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                    shape = CircleShape,
+                                )
+                            } else {
+                                Modifier
+                            },
+                        ),
                 ) {
                     Icon(
-                        imageVector = if (otherSideMode) Icons.Filled.DarkMode else Icons.Outlined.DarkMode,
+                        painter = painterResource(R.drawable.ic_otherside),
                         contentDescription = "OtherSide",
                         tint = if (otherSideMode) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                     )
