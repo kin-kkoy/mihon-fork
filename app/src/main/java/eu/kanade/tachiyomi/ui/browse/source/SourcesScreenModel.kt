@@ -7,9 +7,12 @@ import eu.kanade.domain.source.interactor.GetEnabledSources
 import eu.kanade.domain.source.interactor.ToggleSource
 import eu.kanade.domain.source.interactor.ToggleSourcePin
 import eu.kanade.presentation.browse.SourceUiModel
+import eu.kanade.tachiyomi.extension.ExtensionManager
+import eu.kanade.tachiyomi.ui.browse.OtherSideBrowseState
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import logcat.LogPriority
@@ -25,6 +28,7 @@ class SourcesScreenModel(
     private val getEnabledSources: GetEnabledSources = Injekt.get(),
     private val toggleSource: ToggleSource = Injekt.get(),
     private val toggleSourcePin: ToggleSourcePin = Injekt.get(),
+    private val extensionManager: ExtensionManager = Injekt.get(),
 ) : StateScreenModel<SourcesScreenModel.State>(State()) {
 
     private val _events = Channel<Event>(Int.MAX_VALUE)
@@ -32,7 +36,22 @@ class SourcesScreenModel(
 
     init {
         screenModelScope.launchIO {
-            getEnabledSources.subscribe()
+            // A source is NSFW when it comes from an NSFW extension package. OtherSide mode shows
+            // ONLY those NSFW sources; normal mode shows ONLY the non-NSFW ones.
+            combine(
+                getEnabledSources.subscribe(),
+                extensionManager.installedExtensionsFlow,
+                OtherSideBrowseState.enabled,
+            ) { sources, installedExtensions, otherSide ->
+                val nsfwSourceIds = installedExtensions
+                    .filter { it.isNsfw }
+                    .flatMap { ext -> ext.sources.map { it.id } }
+                    .toHashSet()
+                sources.filter { source ->
+                    val isNsfw = source.id in nsfwSourceIds
+                    if (otherSide) isNsfw else !isNsfw
+                }
+            }
                 .catch {
                     logcat(LogPriority.ERROR, it)
                     _events.send(Event.FailedFetchingSources)

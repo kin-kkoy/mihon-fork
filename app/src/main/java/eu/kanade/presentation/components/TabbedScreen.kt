@@ -6,9 +6,15 @@ import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.SnackbarHost
@@ -19,9 +25,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.zIndex
 import dev.icerock.moko.resources.StringResource
+import eu.kanade.tachiyomi.R
 import kotlinx.coroutines.launch
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.TabText
@@ -34,6 +45,9 @@ fun TabbedScreen(
     state: PagerState = rememberPagerState { tabs.size },
     searchQuery: String? = null,
     onChangeSearchQuery: (String?) -> Unit = {},
+    otherSideEnabled: Boolean = false,
+    onClickOtherSide: (() -> Unit)? = null,
+    onOtherSideOriginChanged: (Offset) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -44,7 +58,40 @@ fun TabbedScreen(
             val searchEnabled = tab.searchEnabled
 
             SearchToolbar(
-                titleContent = { AppBarTitle(stringResource(titleRes)) },
+                titleContent = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AppBarTitle(stringResource(titleRes))
+                        if (onClickOtherSide != null) {
+                            IconButton(
+                                onClick = onClickOtherSide,
+                                modifier = Modifier
+                                    .onGloballyPositioned {
+                                        onOtherSideOriginChanged(it.boundsInWindow().center)
+                                    }
+                                    .then(
+                                        if (otherSideEnabled) {
+                                            Modifier.background(
+                                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                                shape = CircleShape,
+                                            )
+                                        } else {
+                                            Modifier
+                                        },
+                                    ),
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_otherside),
+                                    contentDescription = "Cross to OtherSide",
+                                    tint = if (otherSideEnabled) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        LocalContentColor.current
+                                    },
+                                )
+                            }
+                        }
+                    }
+                },
                 searchEnabled = searchEnabled,
                 searchQuery = if (searchEnabled) searchQuery else null,
                 onChangeSearchQuery = onChangeSearchQuery,
