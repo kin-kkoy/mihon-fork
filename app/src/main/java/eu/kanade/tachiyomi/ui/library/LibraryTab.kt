@@ -219,8 +219,6 @@ data object LibraryTab : Tab {
                         screenModel.clearSelection()
                         navigator.push(MigrationConfigScreen(selection))
                     },
-                    onOtherSideClicked = screenModel::toggleOtherSideForSelection,
-                    otherSideLabel = if (state.otherSideMode) "Remove from OtherSide" else "Move to OtherSide",
                 )
             },
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },

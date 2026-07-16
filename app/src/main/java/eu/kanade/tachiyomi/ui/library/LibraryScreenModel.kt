@@ -86,17 +86,17 @@ class LibraryScreenModel(
         mutableState.update { state ->
             state.copy(activeCategoryIndex = libraryPreferences.lastUsedCategory.get())
         }
-        // Hides OtherSide-flagged manga in normal mode; shows only them in OtherSide mode.
-        val filteredFavoritesFlow = combine(
-            getFavoritesFlow(),
+        // Shows only the categories that belong to the current OtherSide mode.
+        // Normal mode: every category except those marked as OtherSide (the system category id 0 is always normal).
+        // OtherSide mode: only the categories marked as OtherSide.
+        val visibleCategoriesFlow = combine(
+            getCategories.subscribe(),
             otherSideMode,
-            libraryPreferences.otherSideMangaIds.changes(),
-        ) { favs, mode, ids ->
-            val set = ids.mapNotNull { it.toLongOrNull() }.toSet()
-            if (mode) {
-                favs.filter { it.libraryManga.manga.id in set }
-            } else {
-                favs.filter { it.libraryManga.manga.id !in set }
+            libraryPreferences.otherSideCategoryIds.changes(),
+        ) { categories, mode, otherSideIds ->
+            categories.filter { category ->
+                val isOtherSide = category.id != 0L && category.id.toString() in otherSideIds
+                if (mode) isOtherSide else !isOtherSide
             }
         }
 
@@ -109,8 +109,8 @@ class LibraryScreenModel(
         screenModelScope.launchIO {
             combine(
                 state.map { it.searchQuery }.distinctUntilChanged().debounce(0.25.seconds),
-                getCategories.subscribe(),
-                filteredFavoritesFlow,
+                visibleCategoriesFlow,
+                getFavoritesFlow(),
                 getLibraryItemPreferencesFlow(),
             ) { searchQuery, categories, favorites, itemPreferences ->
                 val showSystemCategory = favorites.any { it.libraryManga.categories.contains(0) }
@@ -565,25 +565,6 @@ class LibraryScreenModel(
      */
     fun toggleOtherSide() {
         otherSideMode.update { !it }
-    }
-
-    /**
-     * Adds/removes the currently selected manga to/from OtherSide, then clears the selection.
-     * If any selected manga is not yet flagged, all become flagged; otherwise all are unflagged.
-     */
-    fun toggleOtherSideForSelection() {
-        val selection = state.value.selection
-        if (selection.isEmpty()) return
-        val current = libraryPreferences.otherSideMangaIds.get()
-        val selectionStrings = selection.map { it.toString() }.toSet()
-        val allFlagged = selectionStrings.all { it in current }
-        val updated = if (allFlagged) {
-            current - selectionStrings
-        } else {
-            current + selectionStrings
-        }
-        libraryPreferences.otherSideMangaIds.set(updated)
-        clearSelection()
     }
 
     private var lastSelectionCategory: Long? = null

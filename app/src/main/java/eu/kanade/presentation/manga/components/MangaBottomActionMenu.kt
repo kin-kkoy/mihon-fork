@@ -237,8 +237,6 @@ fun LibraryBottomActionMenu(
     onDownloadClicked: ((DownloadAction) -> Unit)?,
     onDeleteClicked: () -> Unit,
     onMigrateClicked: () -> Unit,
-    onOtherSideClicked: () -> Unit,
-    otherSideLabel: String,
     modifier: Modifier = Modifier,
 ) {
     AnimatedVisibility(
@@ -326,28 +324,6 @@ fun LibraryBottomActionMenu(
                         onLongClick = { onLongClickItem(5) },
                         onClick = onDeleteClicked,
                     )
-                    var overflowMenuOpen by remember { mutableStateOf(false) }
-                    Button(
-                        title = stringResource(MR.strings.label_more),
-                        icon = Icons.Outlined.MoreVert,
-                        toConfirm = false,
-                        onLongClick = {},
-                        onClick = { overflowMenuOpen = true },
-                    ) {
-                        DropdownMenu(
-                            expanded = overflowMenuOpen,
-                            onDismissRequest = { overflowMenuOpen = false },
-                            offset = BottomBarMenuDpOffset,
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(otherSideLabel) },
-                                onClick = {
-                                    overflowMenuOpen = false
-                                    onOtherSideClicked()
-                                },
-                            )
-                        }
-                    }
                 } else {
                     var overflowMenuOpen by remember { mutableStateOf(false) }
                     Button(
@@ -369,13 +345,6 @@ fun LibraryBottomActionMenu(
                             DropdownMenuItem(
                                 text = { Text(stringResource(MR.strings.action_delete)) },
                                 onClick = onDeleteClicked,
-                            )
-                            DropdownMenuItem(
-                                text = { Text(otherSideLabel) },
-                                onClick = {
-                                    overflowMenuOpen = false
-                                    onOtherSideClicked()
-                                },
                             )
                         }
                     }

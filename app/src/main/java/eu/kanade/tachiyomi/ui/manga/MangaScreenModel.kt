@@ -355,44 +355,6 @@ class MangaScreenModel(
         }
     }
 
-    /**
-     * Whether the current manga is flagged into the Library's OtherSide partition.
-     */
-    val isInOtherSide: Boolean
-        get() = successState?.manga?.id?.let {
-            libraryPreferences.otherSideMangaIds.get().contains(it.toString())
-        } == true
-
-    /**
-     * Adds the current manga to (or removes it from) the OtherSide partition.
-     * When flagging a manga that isn't in the library yet, it is silently favorited
-     * (added to the library) so it actually lands in the OtherSide partition.
-     */
-    fun toggleOtherSide() {
-        val manga = successState?.manga ?: return
-        screenModelScope.launchIO {
-            val key = manga.id.toString()
-            val current = libraryPreferences.otherSideMangaIds.get().toMutableSet()
-            if (key in current) {
-                // Unflag; leave the manga in the library.
-                current.remove(key)
-                libraryPreferences.otherSideMangaIds.set(current)
-            } else {
-                // Flag; ensure the manga is in the library first (silently, no category dialog).
-                if (!manga.favorite) {
-                    val result = updateManga.awaitUpdateFavorite(manga.id, true)
-                    if (!result) return@launchIO
-                    val categories = getCategories()
-                    val defaultCategoryId = libraryPreferences.defaultCategory.get().toLong()
-                    val defaultCategory = categories.find { it.id == defaultCategoryId }
-                    moveMangaToCategory(defaultCategory)
-                }
-                current.add(key)
-                libraryPreferences.otherSideMangaIds.set(current)
-            }
-        }
-    }
-
     fun showChangeCategoryDialog() {
         val manga = successState?.manga ?: return
         screenModelScope.launch {
