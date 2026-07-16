@@ -16,12 +16,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.FilterChip
@@ -80,17 +78,6 @@ fun GlobalSearchToolbar(
                 onClickCloseSearch = navigateUp,
                 navigateUp = navigateUp,
                 scrollBehavior = scrollBehavior,
-                actions = {
-                    if (!hideSourceFilter) {
-                        SourcePickerButton(
-                            enabledSources = enabledSources,
-                            selectedSourceIds = selectedSourceIds,
-                            onToggleSource = onToggleSource,
-                            onSelectAll = onSelectAll,
-                            onSelectNone = onSelectNone,
-                        )
-                    }
-                },
             )
             if (progress in 1..<total) {
                 LinearProgressIndicator(
@@ -122,6 +109,16 @@ fun GlobalSearchToolbar(
                     Text(text = stringResource(MR.strings.has_results))
                 },
             )
+
+            if (!hideSourceFilter) {
+                SourcePickerButton(
+                    enabledSources = enabledSources,
+                    selectedSourceIds = selectedSourceIds,
+                    onToggleSource = onToggleSource,
+                    onSelectAll = onSelectAll,
+                    onSelectNone = onSelectNone,
+                )
+            }
         }
 
         HorizontalDivider()
@@ -139,22 +136,21 @@ private fun SourcePickerButton(
     var expanded by remember { mutableStateOf(false) }
 
     Box {
-        BadgedBox(
-            badge = {
-                if (selectedSourceIds.isNotEmpty()) {
-                    Badge {
-                        Text(text = "${selectedSourceIds.size}")
-                    }
-                }
-            },
-        ) {
-            IconButton(onClick = { expanded = true }) {
+        FilterChip(
+            selected = expanded,
+            onClick = { expanded = true },
+            trailingIcon = {
                 Icon(
-                    imageVector = Icons.Outlined.Tune,
-                    contentDescription = "Search in",
+                    imageVector = Icons.Outlined.ArrowDropDown,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(FilterChipDefaults.IconSize),
                 )
-            }
-        }
+            },
+            label = {
+                Text(text = "Sources · ${selectedSourceIds.size}")
+            },
+        )
 
         SourcePickerMenu(
             expanded = expanded,
