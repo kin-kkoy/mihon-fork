@@ -42,7 +42,7 @@ jobs:
           storePassword: ${{ secrets.storePassword }}
           keyAlias: ${{ secrets.keyAlias }}
           keyPassword: ${{ secrets.keyPassword }}
-        run: ./gradlew assembleRelease --stacktrace
+        run: ./gradlew assembleRelease --stacktrace -Penable-updater
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4

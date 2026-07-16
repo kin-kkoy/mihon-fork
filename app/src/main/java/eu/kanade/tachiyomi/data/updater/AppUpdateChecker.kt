@@ -44,7 +44,8 @@ val GITHUB_REPO: String by lazy {
     if (isPreviewBuildType) {
         "mihonapp/mihon-preview"
     } else {
-        "mihonapp/mihon"
+        // Fork: check this repo's own releases for in-app updates.
+        "kin-kkoy/mihon-fork"
     }
 }
 
