@@ -71,6 +71,16 @@ data object MoreTab : Tab {
             onClickSettings = { navigator.push(SettingsScreen()) },
             onClickSupport = { navigator.push(SupportUsScreen()) },
             onClickAbout = { navigator.push(SettingsScreen(SettingsScreen.Destination.About)) },
+            onNavigateToNewUpdate = { result ->
+                navigator.push(
+                    NewUpdateScreen(
+                        versionName = result.release.version,
+                        changelogInfo = result.release.info,
+                        releaseLink = result.release.releaseLink,
+                        downloadLink = result.release.downloadLink,
+                    ),
+                )
+            },
         )
     }
 }

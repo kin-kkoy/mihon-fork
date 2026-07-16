@@ -1,6 +1,9 @@
 package eu.kanade.presentation.more
 
+import android.content.Context
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.Label
@@ -8,17 +11,35 @@ import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
+import eu.kanade.tachiyomi.data.updater.AppUpdateChecker
 import eu.kanade.tachiyomi.ui.more.DownloadQueueState
+import eu.kanade.tachiyomi.util.system.toast
+import eu.kanade.tachiyomi.util.system.updaterEnabled
+import kotlinx.coroutines.launch
+import logcat.LogPriority
 import tachiyomi.core.common.Constants
+import tachiyomi.core.common.util.lang.withIOContext
+import tachiyomi.core.common.util.lang.withUIContext
+import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -37,8 +58,12 @@ fun MoreScreen(
     onClickSettings: () -> Unit,
     onClickSupport: () -> Unit,
     onClickAbout: () -> Unit,
+    onNavigateToNewUpdate: (result: GetApplicationRelease.Result.NewUpdate) -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isCheckingUpdates by remember { mutableStateOf(false) }
 
     Scaffold { contentPadding ->
         ScrollbarLazyColumn(contentPadding = contentPadding) {
@@ -132,6 +157,36 @@ fun MoreScreen(
                     onPreferenceClick = onClickAbout,
                 )
             }
+            if (updaterEnabled) {
+                item {
+                    TextPreferenceWidget(
+                        title = stringResource(MR.strings.check_for_updates),
+                        icon = Icons.Outlined.NewReleases,
+                        widget = {
+                            AnimatedVisibility(visible = isCheckingUpdates) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(28.dp),
+                                    strokeWidth = 3.dp,
+                                )
+                            }
+                        },
+                        onPreferenceClick = {
+                            if (!isCheckingUpdates) {
+                                scope.launch {
+                                    isCheckingUpdates = true
+                                    checkVersion(
+                                        context = context,
+                                        onAvailableUpdate = onNavigateToNewUpdate,
+                                        onFinish = {
+                                            isCheckingUpdates = false
+                                        },
+                                    )
+                                }
+                            }
+                        },
+                    )
+                }
+            }
             item {
                 TextPreferenceWidget(
                     title = stringResource(MR.strings.label_help),
@@ -139,6 +194,38 @@ fun MoreScreen(
                     onPreferenceClick = { uriHandler.openUri(Constants.URL_HELP) },
                 )
             }
+        }
+    }
+}
+
+/**
+ * Checks version and shows a user prompt if an update is available.
+ * Mirrors the forced update check used on the About screen.
+ */
+private suspend fun checkVersion(
+    context: Context,
+    onAvailableUpdate: (GetApplicationRelease.Result.NewUpdate) -> Unit,
+    onFinish: () -> Unit,
+) {
+    val updateChecker = AppUpdateChecker()
+    withUIContext {
+        try {
+            when (val result = withIOContext { updateChecker.checkForUpdate(context, forceCheck = true) }) {
+                is GetApplicationRelease.Result.NewUpdate -> {
+                    onAvailableUpdate(result)
+                }
+                is GetApplicationRelease.Result.NoNewUpdate -> {
+                    context.toast(MR.strings.update_check_no_new_updates)
+                }
+                is GetApplicationRelease.Result.OsTooOld -> {
+                    context.toast(MR.strings.update_check_eol)
+                }
+            }
+        } catch (e: Exception) {
+            context.toast(e.message)
+            logcat(LogPriority.ERROR, e)
+        } finally {
+            onFinish()
         }
     }
 }
