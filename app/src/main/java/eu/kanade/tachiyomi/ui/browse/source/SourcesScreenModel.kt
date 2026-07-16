@@ -6,8 +6,8 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.source.interactor.GetEnabledSources
 import eu.kanade.domain.source.interactor.ToggleSource
 import eu.kanade.domain.source.interactor.ToggleSourcePin
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.browse.SourceUiModel
-import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.ui.browse.OtherSideBrowseState
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.catch
@@ -28,7 +28,7 @@ class SourcesScreenModel(
     private val getEnabledSources: GetEnabledSources = Injekt.get(),
     private val toggleSource: ToggleSource = Injekt.get(),
     private val toggleSourcePin: ToggleSourcePin = Injekt.get(),
-    private val extensionManager: ExtensionManager = Injekt.get(),
+    private val sourcePreferences: SourcePreferences = Injekt.get(),
 ) : StateScreenModel<SourcesScreenModel.State>(State()) {
 
     private val _events = Channel<Event>(Int.MAX_VALUE)
@@ -36,20 +36,16 @@ class SourcesScreenModel(
 
     init {
         screenModelScope.launchIO {
-            // A source is NSFW when it comes from an NSFW extension package. OtherSide mode shows
-            // ONLY those NSFW sources; normal mode shows ONLY the non-NSFW ones.
+            // OtherSide is a user-chosen per-source set. Normal mode shows only sources NOT in the
+            // set; OtherSide mode shows only sources that ARE in the set.
             combine(
                 getEnabledSources.subscribe(),
-                extensionManager.installedExtensionsFlow,
+                sourcePreferences.otherSideSourceIds.changes(),
                 OtherSideBrowseState.enabled,
-            ) { sources, installedExtensions, otherSide ->
-                val nsfwSourceIds = installedExtensions
-                    .filter { it.isNsfw }
-                    .flatMap { ext -> ext.sources.map { it.id } }
-                    .toHashSet()
+            ) { sources, otherSideIds, otherSide ->
                 sources.filter { source ->
-                    val isNsfw = source.id in nsfwSourceIds
-                    if (otherSide) isNsfw else !isNsfw
+                    val inOtherSide = source.id.toString() in otherSideIds
+                    if (otherSide) inOtherSide else !inOtherSide
                 }
             }
                 .catch {
@@ -57,6 +53,11 @@ class SourcesScreenModel(
                     _events.send(Event.FailedFetchingSources)
                 }
                 .collectLatest(::collectLatestSources)
+        }
+        screenModelScope.launchIO {
+            sourcePreferences.otherSideSourceIds.changes().collectLatest { ids ->
+                mutableState.update { it.copy(otherSideSourceIds = ids) }
+            }
         }
     }
 
@@ -105,6 +106,13 @@ class SourcesScreenModel(
         toggleSourcePin.await(source)
     }
 
+    fun toggleOtherSide(source: Source) {
+        val id = source.id.toString()
+        sourcePreferences.otherSideSourceIds.getAndSet { ids ->
+            if (id in ids) ids - id else ids + id
+        }
+    }
+
     fun showSourceDialog(source: Source) {
         mutableState.update { it.copy(dialog = Dialog(source)) }
     }
@@ -124,6 +132,7 @@ class SourcesScreenModel(
         val dialog: Dialog? = null,
         val isLoading: Boolean = true,
         val items: List<SourceUiModel> = listOf(),
+        val otherSideSourceIds: Set<String> = emptySet(),
     ) {
         val isEmpty = items.isEmpty()
     }

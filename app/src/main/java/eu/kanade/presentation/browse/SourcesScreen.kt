@@ -6,12 +6,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -21,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.browse.components.BaseSourceItem
+import eu.kanade.presentation.components.OtherSideToggleButton
 import eu.kanade.tachiyomi.ui.browse.source.SourcesScreenModel
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreenModel.Listing
 import eu.kanade.tachiyomi.util.system.LocaleHelper
@@ -28,7 +24,6 @@ import tachiyomi.domain.source.model.Pin
 import tachiyomi.domain.source.model.Source
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
-import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues
 import tachiyomi.presentation.core.i18n.stringResource
@@ -43,7 +38,7 @@ fun SourcesScreen(
     state: SourcesScreenModel.State,
     contentPadding: PaddingValues,
     onClickItem: (Source, Listing) -> Unit,
-    onClickPin: (Source) -> Unit,
+    onToggleOtherSide: (Source) -> Unit,
     onLongClickItem: (Source) -> Unit,
 ) {
     when {
@@ -81,9 +76,10 @@ fun SourcesScreen(
                         is SourceUiModel.Item -> SourceItem(
                             modifier = Modifier.animateItem(),
                             source = model.source,
+                            isOtherSide = model.source.id.toString() in state.otherSideSourceIds,
                             onClickItem = onClickItem,
                             onLongClickItem = onLongClickItem,
-                            onClickPin = onClickPin,
+                            onToggleOtherSide = onToggleOtherSide,
                         )
                     }
                 }
@@ -109,9 +105,10 @@ private fun SourceHeader(
 @Composable
 private fun SourceItem(
     source: Source,
+    isOtherSide: Boolean,
     onClickItem: (Source, Listing) -> Unit,
     onLongClickItem: (Source) -> Unit,
-    onClickPin: (Source) -> Unit,
+    onToggleOtherSide: (Source) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BaseSourceItem(
@@ -130,35 +127,12 @@ private fun SourceItem(
                     )
                 }
             }
-            SourcePinButton(
-                isPinned = Pin.Pinned in source.pin,
-                onClick = { onClickPin(source) },
+            OtherSideToggleButton(
+                active = isOtherSide,
+                onClick = { onToggleOtherSide(source) },
             )
         },
     )
-}
-
-@Composable
-private fun SourcePinButton(
-    isPinned: Boolean,
-    onClick: () -> Unit,
-) {
-    val icon = if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin
-    val tint = if (isPinned) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.onBackground.copy(
-            alpha = SECONDARY_ALPHA,
-        )
-    }
-    val description = if (isPinned) MR.strings.action_unpin else MR.strings.action_pin
-    IconButton(onClick = onClick) {
-        Icon(
-            imageVector = icon,
-            tint = tint,
-            contentDescription = stringResource(description),
-        )
-    }
 }
 
 @Composable

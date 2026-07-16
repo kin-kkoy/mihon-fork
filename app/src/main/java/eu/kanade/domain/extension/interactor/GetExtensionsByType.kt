@@ -4,7 +4,6 @@ import eu.kanade.domain.extension.model.Extensions
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.extension.model.Extension
-import eu.kanade.tachiyomi.ui.browse.OtherSideBrowseState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 
@@ -14,18 +13,16 @@ class GetExtensionsByType(
 ) {
 
     fun subscribe(): Flow<Extensions> {
+        val showNsfwSources = preferences.showNsfwSource.get()
+
         return combine(
             preferences.enabledLanguages.changes(),
             extensionManager.installedExtensionsFlow,
             extensionManager.untrustedExtensionsFlow,
             extensionManager.availableExtensionsFlow,
-            OtherSideBrowseState.enabled,
-        ) { enabledLanguages, _installed, _untrusted, _available, otherSide ->
-            // OtherSide mode reveals ONLY NSFW extensions (regardless of the global showNsfwSource
-            // preference); normal mode shows ONLY non-NSFW extensions.
-            val nsfwMatch: (Boolean) -> Boolean = { isNsfw -> if (otherSide) isNsfw else !isNsfw }
+        ) { enabledLanguages, _installed, _untrusted, _available ->
             val (updates, installed) = _installed
-                .filter { nsfwMatch(it.isNsfw) }
+                .filter { (showNsfwSources || !it.isNsfw) }
                 .sortedWith(
                     compareBy<Extension.Installed> { !it.isObsolete }
                         .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name },
@@ -33,14 +30,14 @@ class GetExtensionsByType(
                 .partition { it.hasUpdate }
 
             val untrusted = _untrusted
-                .filter { nsfwMatch(it.isNsfw) }
+                .filter { (showNsfwSources || !it.isNsfw) }
                 .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
 
             val available = _available
                 .filter { extension ->
                     _installed.none { it.pkgName == extension.pkgName } &&
                         _untrusted.none { it.pkgName == extension.pkgName } &&
-                        nsfwMatch(extension.isNsfw)
+                        (showNsfwSources || !extension.isNsfw)
                 }
                 .flatMap { ext ->
                     ext.sources.filter { it.lang in enabledLanguages }

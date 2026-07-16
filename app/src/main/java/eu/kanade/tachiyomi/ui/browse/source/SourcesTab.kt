@@ -51,7 +51,7 @@ fun Screen.sourcesTab(): TabContent {
                 onClickItem = { source, listing ->
                     navigator.push(BrowseSourceScreen(source.id, listing.query))
                 },
-                onClickPin = screenModel::togglePin,
+                onToggleOtherSide = screenModel::toggleOtherSide,
                 onLongClickItem = screenModel::showSourceDialog,
             )
 

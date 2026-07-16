@@ -122,6 +122,15 @@ data object BrowseTab : Tab {
             }
         }
 
+        // The crossover toggle beside the "Browse" title belongs to the Sources sub-tab only
+        // (page 0). Hide it on Extensions and Migrate, and leave OtherSide mode when switching away.
+        val onSourcesPage = state.currentPage == 0
+        LaunchedEffect(onSourcesPage) {
+            if (!onSourcesPage && OtherSideBrowseState.enabled.value) {
+                OtherSideBrowseState.enabled.value = false
+            }
+        }
+
         val browseContent = @Composable {
             TabbedScreen(
                 titleRes = MR.strings.browse,
@@ -130,7 +139,7 @@ data object BrowseTab : Tab {
                 searchQuery = extensionsState.searchQuery,
                 onChangeSearchQuery = extensionsScreenModel::search,
                 otherSideEnabled = otherSideEnabled,
-                onClickOtherSide = onToggleOtherSide,
+                onClickOtherSide = if (onSourcesPage) onToggleOtherSide else null,
                 onOtherSideOriginChanged = { revealOrigin = it },
             )
         }
@@ -146,7 +155,7 @@ data object BrowseTab : Tab {
                         drawLayer(graphicsLayer)
                     },
             ) {
-                if (otherSideEnabled) {
+                if (otherSideEnabled && onSourcesPage) {
                     MaterialTheme(colorScheme = OtherSideColorScheme) { browseContent() }
                 } else {
                     browseContent()
