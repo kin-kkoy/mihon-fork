@@ -113,6 +113,7 @@ class StorageDashboardScreen : Screen() {
                 val bucket = state.buckets[index]
                 BucketRow(
                     label = bucket.label,
+                    description = bucket.description,
                     sizeText = Formatter.formatFileSize(context, bucket.size),
                     onClear = { onClear(bucket) },
                 )
@@ -130,6 +131,7 @@ class StorageDashboardScreen : Screen() {
     @Composable
     private fun BucketRow(
         label: String,
+        description: String,
         sizeText: String,
         onClear: () -> Unit,
     ) {
@@ -148,9 +150,13 @@ class StorageDashboardScreen : Screen() {
                     style = MaterialTheme.typography.bodyLarge,
                 )
                 Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.secondaryItemAlpha(),
+                )
+                Text(
                     text = sizeText,
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.secondaryItemAlpha(),
                 )
             }
             TextButton(onClick = onClear) {
@@ -190,12 +196,27 @@ class StorageDashboardScreen : Screen() {
 /**
  * The storage buckets shown on the dashboard.
  */
-enum class StorageBucket(val label: String) {
-    Downloads("Downloads"),
-    CoverCache("Cover cache"),
-    ImageCache("Image cache"),
-    ChapterCache("Chapter cache"),
-    AutoBackups("Auto backups"),
+enum class StorageBucket(val label: String, val description: String) {
+    Downloads(
+        "Downloads",
+        "Chapters saved for offline reading. The one thing that grows without limit — usually the biggest.",
+    ),
+    CoverCache(
+        "Library covers",
+        "Cover images for the manga in your library.",
+    ),
+    ImageCache(
+        "Browse & search cache",
+        "Thumbnails from browsing and searching sources. Temporary — clears itself and is safe to clear.",
+    ),
+    ChapterCache(
+        "Reader page cache",
+        "Pages held while reading online. Capped at 100 MB; safe to clear.",
+    ),
+    AutoBackups(
+        "Auto backups",
+        "Automatic library backups (small).",
+    ),
 }
 
 private class StorageDashboardScreenModel(
@@ -271,6 +292,7 @@ private class StorageDashboardScreenModel(
         val size: Long,
     ) {
         val label: String get() = type.label
+        val description: String get() = type.description
     }
 
     @Immutable
