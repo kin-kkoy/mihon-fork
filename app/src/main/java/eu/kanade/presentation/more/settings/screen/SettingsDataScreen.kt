@@ -53,6 +53,7 @@ import eu.kanade.tachiyomi.data.backup.create.BackupCreateJob
 import eu.kanade.tachiyomi.data.backup.restore.BackupRestoreJob
 import eu.kanade.tachiyomi.data.export.LibraryExporter
 import eu.kanade.tachiyomi.data.export.LibraryExporter.ExportOptions
+import eu.kanade.tachiyomi.ui.security.RepressManager
 import eu.kanade.tachiyomi.util.system.DeviceUtil
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +64,7 @@ import tachiyomi.core.common.storage.displayablePath
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.backup.service.BackupPreferences
 import tachiyomi.domain.download.service.DownloadPreferences
+import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.model.Manga
@@ -336,7 +338,16 @@ object SettingsDataScreen : SearchableSettings {
         val getFavorites = remember { Injekt.get<GetFavorites>() }
         var favorites by remember { mutableStateOf<List<Manga>>(emptyList()) }
         LaunchedEffect(Unit) {
-            favorites = getFavorites.await()
+            val allFavorites = getFavorites.await()
+            favorites = if (RepressManager.isRepressed) {
+                val otherSideCategoryIds = Injekt.get<LibraryPreferences>().otherSideCategoryIds.get()
+                val getCategories = Injekt.get<GetCategories>()
+                allFavorites.filterNot { manga ->
+                    getCategories.await(manga.id).any { it.id.toString() in otherSideCategoryIds }
+                }
+            } else {
+                allFavorites
+            }
         }
 
         val saveFileLauncher = rememberLauncherForActivityResult(

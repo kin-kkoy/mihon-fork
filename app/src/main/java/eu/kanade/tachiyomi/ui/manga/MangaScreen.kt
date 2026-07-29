@@ -48,6 +48,10 @@ import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.manga.notes.MangaNotesScreen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
+import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.tachiyomi.ui.security.RepressManager
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.system.copyToClipboard
@@ -126,6 +130,7 @@ class MangaScreen(
             },
             onWebViewClicked = {
                 openMangaInWebView(
+                    context,
                     navigator,
                     screenModel.manga,
                     screenModel.source,
@@ -287,7 +292,14 @@ class MangaScreen(
         }
     }
 
-    private fun openMangaInWebView(navigator: Navigator, manga_: Manga?, source_: Source?) {
+    private fun openMangaInWebView(context: Context, navigator: Navigator, manga_: Manga?, source_: Source?) {
+        val sourceId = source_?.id
+        if (RepressManager.isRepressed && sourceId != null &&
+            sourceId.toString() in Injekt.get<SourcePreferences>().otherSideSourceIds.get()
+        ) {
+            context.toast("Blocked while OtherSide is repressed")
+            return
+        }
         getMangaUrl(manga_, source_)?.let { url ->
             navigator.push(
                 WebViewScreen(

@@ -1,9 +1,12 @@
 package eu.kanade.tachiyomi.ui.category
 
 import androidx.compose.runtime.Immutable
+import android.app.Application
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import dev.icerock.moko.resources.StringResource
+import eu.kanade.tachiyomi.ui.security.RepressManager
+import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -75,6 +78,12 @@ class CategoryScreenModel(
     }
 
     fun deleteCategory(categoryId: Long) {
+        if (RepressManager.isRepressed &&
+            categoryId.toString() in libraryPreferences.otherSideCategoryIds.get()
+        ) {
+            Injekt.get<Application>().toast("Can't delete OtherSide categories while repressed")
+            return
+        }
         screenModelScope.launch {
             when (deleteCategory.await(categoryId = categoryId)) {
                 is DeleteCategory.Result.InternalError -> _events.send(CategoryEvent.InternalError)
