@@ -51,6 +51,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import eu.kanade.core.preference.asToggleableState
 import eu.kanade.presentation.category.visualName
+import eu.kanade.presentation.security.rememberOtherSideGate
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.library.OtherSideColorScheme
 import kotlinx.coroutines.delay
@@ -270,7 +271,9 @@ fun ChangeCategoryDialog(
     var oldSnapshot by remember { mutableStateOf<ImageBitmap?>(null) }
     val revealProgress = remember { Animatable(0f) }
 
-    val onToggleOtherSide: () -> Unit = {
+    // Gate entering OtherSide behind the Suppress PIN (no-op when Suppress is off).
+    val gate = rememberOtherSideGate()
+    val doToggleOtherSide: () -> Unit = {
         scope.launch {
             // Snapshot the OLD-themed content, flip the mode+theme, then wipe a growing
             // circle so the NEW theme is revealed from behind the frozen old frame.
@@ -285,6 +288,10 @@ fun ChangeCategoryDialog(
             revealing = false
             oldSnapshot = null
         }
+    }
+    val onToggleOtherSide: () -> Unit = {
+        // Only entering OtherSide (revealing OtherSide categories) requires the PIN.
+        if (!otherSideMode) gate(doToggleOtherSide) else doToggleOtherSide()
     }
 
     val shownSelection = if (otherSideMode) otherSideSelection else normalSelection

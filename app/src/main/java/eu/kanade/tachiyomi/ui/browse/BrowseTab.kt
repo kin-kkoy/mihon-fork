@@ -37,6 +37,7 @@ import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.presentation.components.TabbedScreen
+import eu.kanade.presentation.security.rememberOtherSideGate
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.browse.extension.ExtensionsScreenModel
@@ -105,7 +106,9 @@ data object BrowseTab : Tab {
         var oldSnapshot by remember { mutableStateOf<ImageBitmap?>(null) }
         val revealProgress = remember { Animatable(0f) }
 
-        val onToggleOtherSide: () -> Unit = {
+        // Gate entering OtherSide behind the Suppress PIN (no-op when Suppress is off).
+        val gate = rememberOtherSideGate()
+        val doToggleOtherSide: () -> Unit = {
             scope.launch {
                 // Capture the OLD-themed frame, THEN flip the mode, then wipe a growing circle
                 // that reveals the NEW theme underneath the old snapshot. Icon + ripple are one.
@@ -120,6 +123,10 @@ data object BrowseTab : Tab {
                 revealing = false
                 oldSnapshot = null
             }
+        }
+        val onToggleOtherSide: () -> Unit = {
+            // Only entering OtherSide (normal -> other) requires the PIN; leaving is ungated.
+            if (!otherSideEnabled) gate(doToggleOtherSide) else doToggleOtherSide()
         }
 
         // The crossover toggle beside the "Browse" title belongs to the Sources sub-tab only

@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.browse.components.BaseSourceItem
 import eu.kanade.presentation.components.OtherSideToggleButton
+import eu.kanade.presentation.security.rememberOtherSideGate
 import eu.kanade.tachiyomi.ui.browse.source.SourcesScreenModel
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreenModel.Listing
 import eu.kanade.tachiyomi.util.system.LocaleHelper
@@ -111,6 +112,9 @@ private fun SourceItem(
     onToggleOtherSide: (Source) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Marking a source into/out of OtherSide is an OtherSide mutation: gate it behind the
+    // Suppress PIN (no-op when Suppress is off). The toggle proceeds after unlock.
+    val gate = rememberOtherSideGate()
     BaseSourceItem(
         modifier = modifier,
         source = source,
@@ -129,7 +133,7 @@ private fun SourceItem(
             }
             OtherSideToggleButton(
                 active = isOtherSide,
-                onClick = { onToggleOtherSide(source) },
+                onClick = { gate { onToggleOtherSide(source) } },
             )
         },
     )

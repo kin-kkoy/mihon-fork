@@ -1,23 +1,31 @@
 package eu.kanade.presentation.category
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
 import eu.kanade.presentation.category.components.CategoryFloatingActionButton
 import eu.kanade.presentation.category.components.CategoryListItem
 import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.security.rememberOtherSideGate
 import eu.kanade.tachiyomi.ui.category.CategoryScreenState
+import eu.kanade.tachiyomi.ui.security.OtherSideLock
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import tachiyomi.domain.category.model.Category
@@ -101,6 +109,19 @@ private fun CategoryContent(
         }
     }
 
+    // React to Suppress lock changes so OtherSide categories hide/appear live.
+    val unlocked by OtherSideLock.unlocked.collectAsState()
+    val locked = OtherSideLock.enabled && !unlocked
+    // Gate the per-category OtherSide toggle behind the PIN when locked.
+    val gate = rememberOtherSideGate()
+
+    val displayedCategories = if (locked) {
+        categoriesState.filterNot { it.id.toString() in otherSideCategoryIds }
+    } else {
+        categoriesState
+    }
+    val hasHiddenOtherSide = locked && categoriesState.any { it.id.toString() in otherSideCategoryIds }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         state = lazyListState,
@@ -110,7 +131,7 @@ private fun CategoryContent(
         verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
     ) {
         items(
-            items = categoriesState,
+            items = displayedCategories,
             key = { category -> category.key },
         ) { category ->
             ReorderableItem(reorderableState, category.key) {
@@ -120,8 +141,26 @@ private fun CategoryContent(
                     isOtherSide = category.id.toString() in otherSideCategoryIds,
                     onRename = { onClickRename(category) },
                     onDelete = { onClickDelete(category) },
-                    onToggleOtherSide = { onToggleOtherSide(category) },
+                    onToggleOtherSide = { gate { onToggleOtherSide(category) } },
                 )
+            }
+        }
+        if (hasHiddenOtherSide) {
+            item(key = "otherside-hidden-row") {
+                // Tapping opens the PIN dialog; on unlock the hidden rows reappear (empty action —
+                // the reveal happens via the reactive lock state above).
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { gate { } },
+                ) {
+                    Text(
+                        text = "OtherSide categories are hidden — tap to unlock",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(MaterialTheme.padding.medium),
+                    )
+                }
             }
         }
     }

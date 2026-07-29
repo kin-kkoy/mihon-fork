@@ -54,6 +54,7 @@ import eu.kanade.presentation.library.components.LibraryContent
 import eu.kanade.presentation.library.components.LibraryToolbar
 import eu.kanade.presentation.manga.components.LibraryBottomActionMenu
 import eu.kanade.presentation.more.onboarding.GETTING_STARTED_URL
+import eu.kanade.presentation.security.rememberOtherSideGate
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
@@ -119,7 +120,9 @@ data object LibraryTab : Tab {
         var oldSnapshot by remember { mutableStateOf<ImageBitmap?>(null) }
         val revealProgress = remember { Animatable(0f) }
 
-        val onToggleOtherSide: () -> Unit = {
+        // Gate entering OtherSide behind the Suppress PIN (no-op when Suppress is off).
+        val gate = rememberOtherSideGate()
+        val doToggleOtherSide: () -> Unit = {
             scope.launch {
                 // Capture the OLD-themed frame, THEN swap the theme, then wipe a growing
                 // circle that reveals the NEW theme underneath the old snapshot.
@@ -134,6 +137,10 @@ data object LibraryTab : Tab {
                 revealing = false
                 oldSnapshot = null
             }
+        }
+        val onToggleOtherSide: () -> Unit = {
+            // Only entering OtherSide (normal -> other) requires the PIN; leaving is ungated.
+            if (!state.otherSideMode) gate(doToggleOtherSide) else doToggleOtherSide()
         }
 
         val onClickRefresh: (Category?) -> Boolean = { category ->
