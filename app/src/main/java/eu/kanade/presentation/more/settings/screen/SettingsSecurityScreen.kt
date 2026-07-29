@@ -67,7 +67,9 @@ object SettingsSecurityScreen : SearchableSettings {
                     onUnlocked = {},
                     onPinSet = { pin ->
                         securityPreferences.otherSidePinHash.set(OtherSidePin.hash(pin))
-                        OtherSideLock.unlocked.value = true
+                        // Leave OtherSide LOCKED after (re)setting the PIN so the gate is active
+                        // immediately — otherwise the session stays unlocked until app close.
+                        OtherSideLock.lock()
                         dialogMode = null
                         context.toast("OtherSide PIN saved")
                     },
