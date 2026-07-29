@@ -49,6 +49,15 @@ object RepressManager {
     }
 
     /**
+     * TEST-ONLY: start a repression of exactly [durationMillis], bypassing the one-day minimum, so
+     * the full repress -> trusted-time-check -> auto-clear cycle can be verified in minutes.
+     * Remove this and its settings entry once verified.
+     */
+    fun repressForTest(durationMillis: Long) {
+        prefs.otherSideRepressedUntil.set(System.currentTimeMillis() + durationMillis)
+    }
+
+    /**
      * Extends the current repression by [additionalMillis]. Add-only: the deadline can only move
      * later, never earlier. Safe to call whether or not a repression is currently active.
      */
@@ -64,12 +73,12 @@ object RepressManager {
      * Throttled to at most once per [REFRESH_THROTTLE_MILLIS]. If the network time is unavailable
      * (offline / blocked) nothing changes and the repression stays in place (fail-closed).
      */
-    suspend fun refresh() {
+    suspend fun refresh(force: Boolean = false) {
         val until = prefs.otherSideRepressedUntil.get()
         if (until <= 0) return
 
         val now = SystemClock.elapsedRealtime()
-        if (lastRefreshElapsed != 0L && now - lastRefreshElapsed < REFRESH_THROTTLE_MILLIS) return
+        if (!force && lastRefreshElapsed != 0L && now - lastRefreshElapsed < REFRESH_THROTTLE_MILLIS) return
         lastRefreshElapsed = now
 
         val trustedNow = TrustedTime.nowMillis() ?: return

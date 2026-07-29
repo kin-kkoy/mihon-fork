@@ -36,7 +36,7 @@ fun rememberOtherSideGate(): (action: () -> Unit) -> Unit {
         when {
             // Repressed: the entry point is clickable but completely inert — no PIN dialog and no
             // action. Kick a background refresh so it clears once trusted time proves it's over.
-            RepressManager.isRepressed -> scope.launch { RepressManager.refresh() }
+            RepressManager.isRepressed -> scope.launch { RepressManager.refresh(force = true) }
             OtherSideLock.isLocked -> pending = action
             else -> action()
         }

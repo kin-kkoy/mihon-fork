@@ -224,6 +224,19 @@ object SettingsSecurityScreen : SearchableSettings {
                         onClick = { showRepressDialog = true },
                     ),
                 )
+                // TEST-ONLY: verify the full repress -> trusted-time -> auto-clear cycle in 2 minutes.
+                // Remove this (and RepressManager.repressForTest) once verified.
+                add(
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Test repress — 2 minutes",
+                        subtitle = "TEST BUILD ONLY: represses for 2 minutes so you can confirm it " +
+                            "auto-unlocks. Tap the OtherSide toggle after ~2 min to trigger the check.",
+                        onClick = {
+                            RepressManager.repressForTest(2 * 60 * 1000L)
+                            context.toast("Test repress started — ~2 minutes")
+                        },
+                    ),
+                )
             },
         )
     }
