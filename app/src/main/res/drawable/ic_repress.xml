@@ -1,0 +1,40 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!--
+      "Repress the yin-yang". Single-color, TINTABLE outline design (approach a): the yin-yang is
+      drawn as thin strokes (outer ring + S-divider + two eye dots) so a SOLID, filled down-arrow
+      sits clearly in front of it through the center. Because everything is one colour, an outline
+      (rather than a filled half) is what lets the arrow read after Icon(tint=…) flattens the paths.
+    -->
+
+    <!-- Outer ring -->
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.4"
+        android:fillColor="#00000000"
+        android:pathData="M12,3.2 A8.8,8.8 0 1,0 12.01,3.2 Z" />
+
+    <!-- S-shaped divider: small circle bulging right (top) then left (bottom) -->
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.4"
+        android:fillColor="#00000000"
+        android:pathData="M12,3.2 A4.4,4.4 0 0,1 12,12 A4.4,4.4 0 0,0 12,20.8" />
+
+    <!-- Two eye dots -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M12,6.4 m-1.1,0 a1.1,1.1 0 1,0 2.2,0 a1.1,1.1 0 1,0 -2.2,0 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M12,17.6 m-1.1,0 a1.1,1.1 0 1,0 2.2,0 a1.1,1.1 0 1,0 -2.2,0 Z" />
+
+    <!-- Solid down-arrow in front, through the center -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M11.1,4.5 h1.8 v10.2 h2.7 l-3.6,4.8 l-3.6,-4.8 h2.7 z" />
+</vector>

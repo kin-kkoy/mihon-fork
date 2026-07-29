@@ -18,21 +18,29 @@ import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
+import eu.kanade.presentation.security.RepressDurationDialog
+import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.updater.AppUpdateChecker
 import eu.kanade.tachiyomi.ui.more.DownloadQueueState
+import eu.kanade.tachiyomi.ui.security.RepressManager
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.system.updaterEnabled
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.Constants
@@ -45,6 +53,9 @@ import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.util.collectAsState
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 @Composable
 fun MoreScreen(
@@ -64,6 +75,51 @@ fun MoreScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var isCheckingUpdates by remember { mutableStateOf(false) }
+
+    // "Repress the OtherSide" state. otherSideRepressedUntil is the single source of truth; observe
+    // it so the row flips between "start" and "live countdown + extend" without a manual refresh.
+    val securityPreferences = remember { Injekt.get<SecurityPreferences>() }
+    val repressedUntil by securityPreferences.otherSideRepressedUntil.collectAsState()
+    val repressed = repressedUntil > 0
+    var showRepressDialog by remember { mutableStateOf(false) }
+    var showExtendDialog by remember { mutableStateOf(false) }
+    var repressRemaining by remember { mutableStateOf(RepressManager.remainingMillisApprox()) }
+    LaunchedEffect(repressed) {
+        while (repressed) {
+            repressRemaining = RepressManager.remainingMillisApprox()
+            delay(1000)
+        }
+    }
+
+    if (showRepressDialog) {
+        RepressDurationDialog(
+            title = "Repress the OtherSide",
+            warning = "OtherSide will be hidden and completely inert for the chosen time. This " +
+                "can't be cancelled or shortened — it can only be waited out (and only clears once " +
+                "the device is back online).",
+            confirmLabel = "Repress",
+            onConfirm = { millis ->
+                RepressManager.repress(millis)
+                showRepressDialog = false
+                context.toast("OtherSide repressed")
+            },
+            onDismiss = { showRepressDialog = false },
+        )
+    }
+    if (showExtendDialog) {
+        RepressDurationDialog(
+            title = "Extend repression",
+            warning = "This adds time to the current repression. Time can only be added — never " +
+                "removed.",
+            confirmLabel = "Add time",
+            onConfirm = { millis ->
+                RepressManager.extend(millis)
+                showExtendDialog = false
+                context.toast("Repression extended")
+            },
+            onDismiss = { showExtendDialog = false },
+        )
+    }
 
     Scaffold { contentPadding ->
         ScrollbarLazyColumn(contentPadding = contentPadding) {
@@ -133,6 +189,24 @@ fun MoreScreen(
                     onPreferenceClick = onClickDataAndStorage,
                 )
             }
+            item {
+                val repressIcon = ImageVector.vectorResource(R.drawable.ic_repress)
+                if (repressed) {
+                    TextPreferenceWidget(
+                        title = "${formatRepressCountdown(repressRemaining)} left",
+                        subtitle = "Tap to add time",
+                        icon = repressIcon,
+                        onPreferenceClick = { showExtendDialog = true },
+                    )
+                } else {
+                    TextPreferenceWidget(
+                        title = "Repress the OtherSide",
+                        subtitle = "Lock OtherSide for a set time",
+                        icon = repressIcon,
+                        onPreferenceClick = { showRepressDialog = true },
+                    )
+                }
+            }
 
             item { HorizontalDivider() }
 
@@ -196,6 +270,20 @@ fun MoreScreen(
             }
         }
     }
+}
+
+/**
+ * Formats an approximate remaining-repression duration for the live countdown, e.g. "1d 03:12:45"
+ * (the "left" suffix is added by the caller). Days are only shown when non-zero.
+ */
+private fun formatRepressCountdown(millis: Long): String {
+    val totalSeconds = maxOf(0L, millis) / 1000L
+    val days = totalSeconds / 86_400L
+    val hours = (totalSeconds % 86_400L) / 3_600L
+    val minutes = (totalSeconds % 3_600L) / 60L
+    val seconds = totalSeconds % 60L
+    val hms = "%02d:%02d:%02d".format(hours, minutes, seconds)
+    return if (days > 0) "${days}d $hms" else hms
 }
 
 /**

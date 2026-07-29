@@ -49,15 +49,6 @@ object RepressManager {
     }
 
     /**
-     * TEST-ONLY: start a repression of exactly [durationMillis], bypassing the one-day minimum, so
-     * the full repress -> trusted-time-check -> auto-clear cycle can be verified in minutes.
-     * Remove this and its settings entry once verified.
-     */
-    fun repressForTest(durationMillis: Long) {
-        prefs.otherSideRepressedUntil.set(System.currentTimeMillis() + durationMillis)
-    }
-
-    /**
      * Extends the current repression by [additionalMillis]. Add-only: the deadline can only move
      * later, never earlier. Safe to call whether or not a repression is currently active.
      */
