@@ -6,10 +6,12 @@ import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.ui.security.OtherSideLock
+import eu.kanade.tachiyomi.ui.security.RepressManager
 import eu.kanade.tachiyomi.ui.security.UnlockActivity
 import eu.kanade.tachiyomi.util.system.AuthenticatorUtil
 import eu.kanade.tachiyomi.util.system.AuthenticatorUtil.isAuthenticationSupported
@@ -17,6 +19,7 @@ import eu.kanade.tachiyomi.util.view.setSecureScreen
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -56,6 +59,11 @@ interface SecureActivityDelegate {
         fun onApplicationStart() {
             // Re-lock OtherSide if the configured idle timeout elapsed while backgrounded.
             OtherSideLock.onAppForegrounded()
+
+            // Check trusted network time so an expired Repression clears once back online.
+            ProcessLifecycleOwner.get().lifecycleScope.launch {
+                RepressManager.refresh()
+            }
 
             val preferences = Injekt.get<SecurityPreferences>()
             if (!preferences.useAuthenticator.get()) return

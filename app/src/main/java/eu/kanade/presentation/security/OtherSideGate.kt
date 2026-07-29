@@ -4,8 +4,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import eu.kanade.tachiyomi.ui.security.OtherSideLock
+import eu.kanade.tachiyomi.ui.security.RepressManager
+import kotlinx.coroutines.launch
 
 /**
  * Returns a gate function that guards OtherSide-entering actions behind the Suppress PIN.
@@ -17,6 +20,7 @@ import eu.kanade.tachiyomi.ui.security.OtherSideLock
  */
 @Composable
 fun rememberOtherSideGate(): (action: () -> Unit) -> Unit {
+    val scope = rememberCoroutineScope()
     var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
     pending?.let { act ->
         OtherSidePinDialog(
@@ -28,5 +32,13 @@ fun rememberOtherSideGate(): (action: () -> Unit) -> Unit {
             onDismiss = { pending = null },
         )
     }
-    return { action -> if (OtherSideLock.isLocked) pending = action else action() }
+    return { action ->
+        when {
+            // Repressed: the entry point is clickable but completely inert — no PIN dialog and no
+            // action. Kick a background refresh so it clears once trusted time proves it's over.
+            RepressManager.isRepressed -> scope.launch { RepressManager.refresh() }
+            OtherSideLock.isLocked -> pending = action
+            else -> action()
+        }
+    }
 }

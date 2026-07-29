@@ -43,6 +43,8 @@ import eu.kanade.tachiyomi.di.PreferenceModule
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.NetworkPreferences
 import eu.kanade.tachiyomi.ui.base.delegate.SecureActivityDelegate
+import eu.kanade.tachiyomi.ui.security.OtherSideLock
+import eu.kanade.tachiyomi.ui.security.RepressManager
 import eu.kanade.tachiyomi.util.system.DeviceUtil
 import eu.kanade.tachiyomi.util.system.GLUtil
 import eu.kanade.tachiyomi.util.system.WebViewUtil
@@ -105,6 +107,9 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         setupNotificationChannels()
 
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+
+        // Auto-Repress OtherSide for a day after too many failed Suppress PIN attempts.
+        OtherSideLock.onMaxAttempts = { RepressManager.repress(RepressManager.ONE_DAY) }
 
         val scope = ProcessLifecycleOwner.get().lifecycleScope
 

@@ -1,12 +1,24 @@
 package eu.kanade.presentation.more.settings.screen
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.security.OtherSidePinDialog
@@ -14,6 +26,7 @@ import eu.kanade.presentation.security.OtherSidePinMode
 import eu.kanade.tachiyomi.core.security.PrivacyPreferences
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.ui.security.OtherSideLock
+import eu.kanade.tachiyomi.ui.security.RepressManager
 import eu.kanade.tachiyomi.util.system.AuthenticatorUtil.authenticate
 import eu.kanade.tachiyomi.util.system.AuthenticatorUtil.isAuthenticationSupported
 import eu.kanade.tachiyomi.util.system.OtherSidePin
@@ -57,8 +70,44 @@ object SettingsSecurityScreen : SearchableSettings {
         val pinHash by securityPreferences.otherSidePinHash.collectAsState()
         val hasPin = pinHash.isNotEmpty()
 
+        val repressedUntil by securityPreferences.otherSideRepressedUntil.collectAsState()
+        val repressed = repressedUntil > 0
+
         // Dialog state: null = closed, otherwise the active flow.
         var dialogMode by remember { mutableStateOf<OtherSideDialog?>(null) }
+        var showRepressDialog by remember { mutableStateOf(false) }
+        var showExtendDialog by remember { mutableStateOf(false) }
+
+        if (showRepressDialog) {
+            RepressDurationDialog(
+                title = "Repress OtherSide",
+                warning = "OtherSide will be hidden and completely inert for the chosen time. " +
+                    "This can't be cancelled or shortened — it can only be waited out (and only " +
+                    "clears once the device is back online).",
+                confirmLabel = "Repress",
+                onConfirm = { millis ->
+                    RepressManager.repress(millis)
+                    showRepressDialog = false
+                    context.toast("OtherSide repressed")
+                },
+                onDismiss = { showRepressDialog = false },
+            )
+        }
+
+        if (showExtendDialog) {
+            RepressDurationDialog(
+                title = "Extend repression",
+                warning = "This adds time to the current repression. Time can only be added — " +
+                    "never removed.",
+                confirmLabel = "Add time",
+                onConfirm = { millis ->
+                    RepressManager.extend(millis)
+                    showExtendDialog = false
+                    context.toast("Repression extended")
+                },
+                onDismiss = { showExtendDialog = false },
+            )
+        }
 
         when (dialogMode) {
             OtherSideDialog.SetPin, OtherSideDialog.ChangePinNew -> {
@@ -109,6 +158,27 @@ object SettingsSecurityScreen : SearchableSettings {
         return Preference.PreferenceGroup(
             title = "OtherSide lock",
             preferenceItems = buildList {
+                if (repressed) {
+                    // Hard time-lock is active: OtherSide is inert and the PIN can't be changed.
+                    add(
+                        Preference.PreferenceItem.TextPreference(
+                            title = "Repressed — ${formatRemaining(RepressManager.remainingMillisApprox())} left",
+                            subtitle = "OtherSide is hidden and inert. Can't be cancelled or " +
+                                "shortened — only waited out. Clears automatically once the time " +
+                                "passes and the device is online.",
+                            onClick = {},
+                        ),
+                    )
+                    add(
+                        Preference.PreferenceItem.TextPreference(
+                            title = "Extend repression",
+                            subtitle = "Add more time (add-only).",
+                            onClick = { showExtendDialog = true },
+                        ),
+                    )
+                    return@buildList
+                }
+
                 if (!hasPin) {
                     add(
                         Preference.PreferenceItem.TextPreference(
@@ -146,6 +216,14 @@ object SettingsSecurityScreen : SearchableSettings {
                         ),
                     )
                 }
+
+                add(
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Repress OtherSide",
+                        subtitle = "Hard time-lock. Can't be cancelled or shortened once set.",
+                        onClick = { showRepressDialog = true },
+                    ),
+                )
             },
         )
     }
@@ -228,6 +306,82 @@ object SettingsSecurityScreen : SearchableSettings {
         )
     }
 }
+
+/**
+ * Duration picker used for both starting a Repression and extending one. Presets only; the minimum
+ * (one day) is enforced by [RepressManager.repress] regardless.
+ */
+@Composable
+private fun RepressDurationDialog(
+    title: String,
+    warning: String,
+    confirmLabel: String,
+    onConfirm: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var selected by remember { mutableStateOf(RepressPresets.first()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                Text(warning)
+                RepressPresets.forEach { preset ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = preset == selected,
+                                onClick = { selected = preset },
+                            )
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = preset == selected,
+                            onClick = { selected = preset },
+                        )
+                        Text(
+                            text = preset.label,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(selected.millis) }) {
+                Text(confirmLabel)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+private fun formatRemaining(millis: Long): String {
+    val totalMinutes = millis / 60_000L
+    val days = totalMinutes / (60 * 24)
+    val hours = (totalMinutes % (60 * 24)) / 60
+    return if (days > 0) {
+        "${days}d ${hours}h"
+    } else {
+        val minutes = totalMinutes % 60
+        "${hours}h ${minutes}m"
+    }
+}
+
+private data class RepressPreset(val label: String, val millis: Long)
+
+private val RepressPresets = listOf(
+    RepressPreset("1 day", RepressManager.ONE_DAY),
+    RepressPreset("3 days", 3 * RepressManager.ONE_DAY),
+    RepressPreset("1 week", 7 * RepressManager.ONE_DAY),
+    RepressPreset("1 month", 30 * RepressManager.ONE_DAY),
+)
 
 private val LockAfterValues = listOf(
     0, // Always
