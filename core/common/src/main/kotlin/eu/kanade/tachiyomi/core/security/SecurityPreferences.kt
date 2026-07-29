@@ -22,6 +22,17 @@ class SecurityPreferences(
     val hideNotificationContent: Preference<Boolean> = preferenceStore.getBoolean("hide_notification_content", false)
 
     /**
+     * SHA-256 (salted) hash of the OtherSide "Suppress" PIN.
+     * An empty value means the Suppress lock is OFF.
+     */
+    val otherSidePinHash: Preference<String> = preferenceStore.getString("otherside_pin_hash", "")
+
+    /**
+     * Idle minutes before the OtherSide lock re-engages. 0 = re-lock immediately on background.
+     */
+    val otherSideLockAfter: Preference<Int> = preferenceStore.getInt("otherside_lock_after", 0)
+
+    /**
      * For app lock. Will be set when there is a pending timed lock.
      * Otherwise, this pref should be deleted.
      */
