@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -37,6 +38,7 @@ import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.presentation.components.TabbedScreen
+import eu.kanade.presentation.security.RepressDurationDialog
 import eu.kanade.presentation.security.rememberOtherSideGate
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
@@ -47,6 +49,7 @@ import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import eu.kanade.tachiyomi.ui.browse.source.sourcesTab
 import eu.kanade.tachiyomi.ui.library.OtherSideColorScheme
 import eu.kanade.tachiyomi.ui.main.MainActivity
+import eu.kanade.tachiyomi.ui.security.RepressManager
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
@@ -129,6 +132,19 @@ data object BrowseTab : Tab {
             if (!otherSideEnabled) gate(doToggleOtherSide) else doToggleOtherSide()
         }
 
+        // In-OtherSide repress shortcut: shake the scaffold + ripple back to Normal on confirm.
+        var showRepressDialog by remember { mutableStateOf(false) }
+        val shakeX = remember { Animatable(0f) }
+        var shakeTrigger by remember { mutableStateOf(0) }
+        LaunchedEffect(shakeTrigger) {
+            if (shakeTrigger > 0) {
+                shakeX.snapTo(0f)
+                for (target in listOf(-16f, 14f, -10f, 7f, -3f, 0f)) {
+                    shakeX.animateTo(target, animationSpec = tween(durationMillis = 75))
+                }
+            }
+        }
+
         // The crossover toggle beside the "Browse" title belongs to the Sources sub-tab only
         // (page 0). Hide it on Extensions and Migrate, and leave OtherSide mode when switching away.
         val onSourcesPage = state.currentPage == 0
@@ -148,10 +164,19 @@ data object BrowseTab : Tab {
                 otherSideEnabled = otherSideEnabled,
                 onClickOtherSide = if (onSourcesPage) onToggleOtherSide else null,
                 onOtherSideOriginChanged = { revealOrigin = it },
+                onRepressShortcut = if (onSourcesPage) {
+                    { showRepressDialog = true }
+                } else {
+                    null
+                },
             )
         }
 
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { translationX = shakeX.value.dp.toPx() },
+        ) {
             // Continuously record the live (already-themed) Browse frame into a graphics layer
             // so we can snapshot the OLD theme the instant the toggle is tapped.
             Box(
@@ -203,6 +228,23 @@ data object BrowseTab : Tab {
                     }
                 }
             }
+        }
+
+        if (showRepressDialog) {
+            RepressDurationDialog(
+                title = "Repress OtherSide",
+                warning = "This locks OtherSide for the whole time you pick. " +
+                    "You cannot cancel it, shorten it, or undo it once it starts.",
+                confirmLabel = "Repress",
+                onConfirm = { millis ->
+                    showRepressDialog = false
+                    RepressManager.repress(millis)
+                    // Ripple back to Normal (same path the crossover uses) and shake together.
+                    if (OtherSideBrowseState.enabled.value) doToggleOtherSide()
+                    shakeTrigger++
+                },
+                onDismiss = { showRepressDialog = false },
+            )
         }
 
         LaunchedEffect(Unit) {

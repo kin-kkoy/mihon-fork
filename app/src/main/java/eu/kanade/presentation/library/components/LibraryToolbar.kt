@@ -48,6 +48,7 @@ fun LibraryToolbar(
     otherSideMode: Boolean,
     onClickOtherSide: () -> Unit,
     onOtherSideOriginChanged: (Offset) -> Unit,
+    onRepressShortcut: (() -> Unit)?,
     searchQuery: String?,
     onSearchQueryChange: (String?) -> Unit,
     scrollBehavior: TopAppBarScrollBehavior?,
@@ -70,6 +71,7 @@ fun LibraryToolbar(
         otherSideMode = otherSideMode,
         onClickOtherSide = onClickOtherSide,
         onOtherSideOriginChanged = onOtherSideOriginChanged,
+        onRepressShortcut = onRepressShortcut,
         scrollBehavior = scrollBehavior,
     )
 }
@@ -87,6 +89,7 @@ private fun LibraryRegularToolbar(
     otherSideMode: Boolean,
     onClickOtherSide: () -> Unit,
     onOtherSideOriginChanged: (Offset) -> Unit,
+    onRepressShortcut: (() -> Unit)?,
     scrollBehavior: TopAppBarScrollBehavior?,
 ) {
     val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
@@ -128,6 +131,16 @@ private fun LibraryRegularToolbar(
                         contentDescription = "OtherSide",
                         tint = if (otherSideMode) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                     )
+                }
+                // Repress shortcut: only while viewing OtherSide, sits beside the yin-yang.
+                if (otherSideMode && onRepressShortcut != null) {
+                    IconButton(onClick = onRepressShortcut) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_repress),
+                            contentDescription = "Repress OtherSide",
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
             }
         },

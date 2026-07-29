@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -54,9 +55,11 @@ import eu.kanade.presentation.library.components.LibraryContent
 import eu.kanade.presentation.library.components.LibraryToolbar
 import eu.kanade.presentation.manga.components.LibraryBottomActionMenu
 import eu.kanade.presentation.more.onboarding.GETTING_STARTED_URL
+import eu.kanade.presentation.security.RepressDurationDialog
 import eu.kanade.presentation.security.rememberOtherSideGate
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.ui.security.RepressManager
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
@@ -143,6 +146,19 @@ data object LibraryTab : Tab {
             if (!state.otherSideMode) gate(doToggleOtherSide) else doToggleOtherSide()
         }
 
+        // In-OtherSide repress shortcut: shake the scaffold + ripple back to Normal on confirm.
+        var showRepressDialog by remember { mutableStateOf(false) }
+        val shakeX = remember { Animatable(0f) }
+        var shakeTrigger by remember { mutableStateOf(0) }
+        LaunchedEffect(shakeTrigger) {
+            if (shakeTrigger > 0) {
+                shakeX.snapTo(0f)
+                for (target in listOf(-16f, 14f, -10f, 7f, -3f, 0f)) {
+                    shakeX.animateTo(target, animationSpec = tween(durationMillis = 75))
+                }
+            }
+        }
+
         val onClickRefresh: (Category?) -> Boolean = { category ->
             val started = LibraryUpdateJob.startNow(context, category)
             scope.launch {
@@ -191,6 +207,7 @@ data object LibraryTab : Tab {
                     otherSideMode = state.otherSideMode,
                     onClickOtherSide = onToggleOtherSide,
                     onOtherSideOriginChanged = { revealOrigin = it },
+                    onRepressShortcut = { showRepressDialog = true },
                     searchQuery = state.searchQuery,
                     onSearchQueryChange = screenModel::search,
                     // For scroll overlay when no tab
@@ -276,7 +293,11 @@ data object LibraryTab : Tab {
         }
         }
 
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { translationX = shakeX.value.dp.toPx() },
+        ) {
             // Continuously record the live (already-themed) Library frame into a graphics layer
             // so we can snapshot the OLD theme the instant the toggle is tapped.
             Box(
@@ -364,6 +385,23 @@ data object LibraryTab : Tab {
                 )
             }
             null -> {}
+        }
+
+        if (showRepressDialog) {
+            RepressDurationDialog(
+                title = "Repress OtherSide",
+                warning = "This locks OtherSide for the whole time you pick. " +
+                    "You cannot cancel it, shorten it, or undo it once it starts.",
+                confirmLabel = "Repress",
+                onConfirm = { millis ->
+                    showRepressDialog = false
+                    RepressManager.repress(millis)
+                    // Ripple back to Normal (same path the crossover uses) and shake together.
+                    if (state.otherSideMode) doToggleOtherSide()
+                    shakeTrigger++
+                },
+                onDismiss = { showRepressDialog = false },
+            )
         }
 
         BackHandler(enabled = state.selectionMode || state.searchQuery != null) {

@@ -48,6 +48,7 @@ fun TabbedScreen(
     otherSideEnabled: Boolean = false,
     onClickOtherSide: (() -> Unit)? = null,
     onOtherSideOriginChanged: (Offset) -> Unit = {},
+    onRepressShortcut: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -88,6 +89,16 @@ fun TabbedScreen(
                                         LocalContentColor.current
                                     },
                                 )
+                            }
+                            // Repress shortcut: only while viewing OtherSide, beside the yin-yang.
+                            if (otherSideEnabled && onRepressShortcut != null) {
+                                IconButton(onClick = onRepressShortcut) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_repress),
+                                        contentDescription = "Repress OtherSide",
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                }
                             }
                         }
                     }
