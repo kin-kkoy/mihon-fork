@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SmallExtendedFloatingActionButton
 import androidx.compose.material3.SnackbarHost
@@ -37,15 +38,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastMap
+import eu.kanade.domain.chapter.service.ResolvedPin
 import eu.kanade.presentation.components.relativeDateText
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.manga.components.ChapterHeader
@@ -56,11 +60,14 @@ import eu.kanade.presentation.manga.components.MangaChapterListItem
 import eu.kanade.presentation.manga.components.MangaInfoBox
 import eu.kanade.presentation.manga.components.MangaToolbar
 import eu.kanade.presentation.manga.components.MissingChapterCountListItem
+import eu.kanade.presentation.manga.components.PinFilterChipRow
+import eu.kanade.presentation.manga.components.PinSectionHeader
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.source.getNameForMangaInfo
 import eu.kanade.tachiyomi.ui.manga.ChapterList
 import eu.kanade.tachiyomi.ui.manga.MangaScreenModel
+import eu.kanade.tachiyomi.ui.manga.PinFilter
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.service.missingChaptersCount
@@ -124,6 +131,11 @@ fun MangaScreen(
     onChapterSelected: (ChapterList.Item, Boolean, Boolean) -> Unit,
     onAllChapterSelected: (Boolean) -> Unit,
     onInvertSelection: () -> Unit,
+
+    // Chapter pins
+    onPinClicked: (List<Chapter>) -> Unit,
+    onPinFilterChange: (PinFilter) -> Unit,
+    onTogglePinSection: (Long) -> Unit,
 ) {
     val context = LocalContext.current
     val onCopyTagToClipboard: (tag: String) -> Unit = {
@@ -166,6 +178,9 @@ fun MangaScreen(
             onChapterSelected = onChapterSelected,
             onAllChapterSelected = onAllChapterSelected,
             onInvertSelection = onInvertSelection,
+            onPinClicked = onPinClicked,
+            onPinFilterChange = onPinFilterChange,
+            onTogglePinSection = onTogglePinSection,
         )
     } else {
         MangaScreenLargeImpl(
@@ -201,6 +216,9 @@ fun MangaScreen(
             onChapterSelected = onChapterSelected,
             onAllChapterSelected = onAllChapterSelected,
             onInvertSelection = onInvertSelection,
+            onPinClicked = onPinClicked,
+            onPinFilterChange = onPinFilterChange,
+            onTogglePinSection = onTogglePinSection,
         )
     }
 }
@@ -252,6 +270,11 @@ private fun MangaScreenSmallImpl(
     onChapterSelected: (ChapterList.Item, Boolean, Boolean) -> Unit,
     onAllChapterSelected: (Boolean) -> Unit,
     onInvertSelection: () -> Unit,
+
+    // Chapter pins
+    onPinClicked: (List<Chapter>) -> Unit,
+    onPinFilterChange: (PinFilter) -> Unit,
+    onTogglePinSection: (Long) -> Unit,
 ) {
     val chapterListState = rememberLazyListState()
 
@@ -316,6 +339,7 @@ private fun MangaScreenSmallImpl(
                 onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
                 onDownloadChapter = onDownloadChapter,
                 onMultiDeleteClicked = onMultiDeleteClicked,
+                onPinClicked = onPinClicked,
                 fillFraction = 1f,
             )
         },
@@ -427,9 +451,23 @@ private fun MangaScreenSmallImpl(
                         )
                     }
 
+                    chapterPinItems(
+                        state = state,
+                        isAnyChapterSelected = chapters.fastAny { it.selected },
+                        chapterSwipeStartAction = chapterSwipeStartAction,
+                        chapterSwipeEndAction = chapterSwipeEndAction,
+                        onChapterClicked = onChapterClicked,
+                        onDownloadChapter = onDownloadChapter,
+                        onChapterSelected = onChapterSelected,
+                        onChapterSwipe = onChapterSwipe,
+                        onPinFilterChange = onPinFilterChange,
+                        onTogglePinSection = onTogglePinSection,
+                    )
+
                     sharedChapterItems(
                         manga = state.manga,
                         chapters = listItem,
+                        pins = state.pinByChapterId,
                         isAnyChapterSelected = chapters.fastAny { it.selected },
                         chapterSwipeStartAction = chapterSwipeStartAction,
                         chapterSwipeEndAction = chapterSwipeEndAction,
@@ -491,6 +529,11 @@ fun MangaScreenLargeImpl(
     onChapterSelected: (ChapterList.Item, Boolean, Boolean) -> Unit,
     onAllChapterSelected: (Boolean) -> Unit,
     onInvertSelection: () -> Unit,
+
+    // Chapter pins
+    onPinClicked: (List<Chapter>) -> Unit,
+    onPinFilterChange: (PinFilter) -> Unit,
+    onTogglePinSection: (Long) -> Unit,
 ) {
     val layoutDirection = LocalLayoutDirection.current
     val density = LocalDensity.current
@@ -552,6 +595,7 @@ fun MangaScreenLargeImpl(
                     onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
                     onDownloadChapter = onDownloadChapter,
                     onMultiDeleteClicked = onMultiDeleteClicked,
+                    onPinClicked = onPinClicked,
                     fillFraction = 0.5f,
                 )
             }
@@ -661,9 +705,23 @@ fun MangaScreenLargeImpl(
                                 )
                             }
 
+                            chapterPinItems(
+                                state = state,
+                                isAnyChapterSelected = chapters.fastAny { it.selected },
+                                chapterSwipeStartAction = chapterSwipeStartAction,
+                                chapterSwipeEndAction = chapterSwipeEndAction,
+                                onChapterClicked = onChapterClicked,
+                                onDownloadChapter = onDownloadChapter,
+                                onChapterSelected = onChapterSelected,
+                                onChapterSwipe = onChapterSwipe,
+                                onPinFilterChange = onPinFilterChange,
+                                onTogglePinSection = onTogglePinSection,
+                            )
+
                             sharedChapterItems(
                                 manga = state.manga,
                                 chapters = listItem,
+                                pins = state.pinByChapterId,
                                 isAnyChapterSelected = chapters.fastAny { it.selected },
                                 chapterSwipeStartAction = chapterSwipeStartAction,
                                 chapterSwipeEndAction = chapterSwipeEndAction,
@@ -688,6 +746,7 @@ private fun SharedMangaBottomActionMenu(
     onMarkPreviousAsReadClicked: (Chapter) -> Unit,
     onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction) -> Unit)?,
     onMultiDeleteClicked: (List<Chapter>) -> Unit,
+    onPinClicked: (List<Chapter>) -> Unit,
     fillFraction: Float,
     modifier: Modifier = Modifier,
 ) {
@@ -719,12 +778,14 @@ private fun SharedMangaBottomActionMenu(
         }.takeIf {
             selected.fastAny { it.downloadState == Download.State.DOWNLOADED }
         },
+        onPinClicked = { onPinClicked(selected.fastMap { it.chapter }) },
     )
 }
 
 private fun LazyListScope.sharedChapterItems(
     manga: Manga,
     chapters: List<ChapterList>,
+    pins: Map<Long, ResolvedPin>,
     isAnyChapterSelected: Boolean,
     chapterSwipeStartAction: LibraryPreferences.ChapterSwipeAction,
     chapterSwipeEndAction: LibraryPreferences.ChapterSwipeAction,
@@ -732,13 +793,14 @@ private fun LazyListScope.sharedChapterItems(
     onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction) -> Unit)?,
     onChapterSelected: (ChapterList.Item, Boolean, Boolean) -> Unit,
     onChapterSwipe: (ChapterList.Item, LibraryPreferences.ChapterSwipeAction) -> Unit,
+    keyPrefix: String = "",
 ) {
     items(
         items = chapters,
         key = { item ->
             when (item) {
-                is ChapterList.MissingCount -> "missing-count-${item.id}"
-                is ChapterList.Item -> "chapter-${item.id}"
+                is ChapterList.MissingCount -> "${keyPrefix}missing-count-${item.id}"
+                is ChapterList.Item -> "${keyPrefix}chapter-${item.id}"
             }
         },
         contentType = { MangaScreenItem.CHAPTER },
@@ -797,9 +859,73 @@ private fun LazyListScope.sharedChapterItems(
                     onChapterSwipe = {
                         onChapterSwipe(item, it)
                     },
+                    pinColor = pins[item.id]?.let { Color(it.section.color) },
+                    pinNote = pins[item.id]?.note,
                 )
             }
         }
+    }
+}
+
+/**
+ * Chip row (All / Bookmarked / sections) and one collapsible group per section at the top of
+ * the chapter list. Only shown when this manga has pinned chapters.
+ */
+private fun LazyListScope.chapterPinItems(
+    state: MangaScreenModel.State.Success,
+    isAnyChapterSelected: Boolean,
+    chapterSwipeStartAction: LibraryPreferences.ChapterSwipeAction,
+    chapterSwipeEndAction: LibraryPreferences.ChapterSwipeAction,
+    onChapterClicked: (Chapter) -> Unit,
+    onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction) -> Unit)?,
+    onChapterSelected: (ChapterList.Item, Boolean, Boolean) -> Unit,
+    onChapterSwipe: (ChapterList.Item, LibraryPreferences.ChapterSwipeAction) -> Unit,
+    onPinFilterChange: (PinFilter) -> Unit,
+    onTogglePinSection: (Long) -> Unit,
+) {
+    val sections = state.usedPinSections
+    if (sections.isEmpty()) return
+
+    item(key = "pin-chips", contentType = "pin-chips") {
+        PinFilterChipRow(
+            sections = sections,
+            filter = state.pinFilter,
+            onFilterChange = onPinFilterChange,
+        )
+    }
+
+    if (state.pinFilter != PinFilter.All) return
+
+    sections.forEach { section ->
+        val pinned = state.processedChapters.filter { state.pinByChapterId[it.id]?.section?.id == section.id }
+        if (pinned.isEmpty()) return@forEach
+        val expanded = section.id in state.expandedPinSections
+        item(key = "pin-section-${section.id}", contentType = "pin-section") {
+            PinSectionHeader(
+                section = section,
+                count = pinned.size,
+                expanded = expanded,
+                onClick = { onTogglePinSection(section.id) },
+            )
+        }
+        if (expanded) {
+            sharedChapterItems(
+                manga = state.manga,
+                chapters = pinned,
+                pins = state.pinByChapterId,
+                isAnyChapterSelected = isAnyChapterSelected,
+                chapterSwipeStartAction = chapterSwipeStartAction,
+                chapterSwipeEndAction = chapterSwipeEndAction,
+                onChapterClicked = onChapterClicked,
+                onDownloadChapter = onDownloadChapter,
+                onChapterSelected = onChapterSelected,
+                onChapterSwipe = onChapterSwipe,
+                keyPrefix = "pin-${section.id}-",
+            )
+        }
+    }
+    item(key = "pin-divider", contentType = "pin-divider") {
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
     }
 }
 

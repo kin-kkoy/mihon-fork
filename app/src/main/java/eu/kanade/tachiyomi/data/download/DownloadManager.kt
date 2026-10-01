@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.data.download
 
 import android.content.Context
+import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.Page
@@ -40,6 +41,7 @@ class DownloadManager(
     private val getCategories: GetCategories = Injekt.get(),
     private val sourceManager: SourceManager = Injekt.get(),
     private val downloadPreferences: DownloadPreferences = Injekt.get(),
+    private val chapterPinStore: ChapterPinStore = Injekt.get(),
 ) {
 
     /**
@@ -408,11 +410,13 @@ class DownloadManager(
             chapters
         }
 
-        return if (!downloadPreferences.removeBookmarkedChapters.get()) {
+        val withoutBookmarked = if (!downloadPreferences.removeBookmarkedChapters.get()) {
             filteredCategoryManga.filterNot { it.bookmark }
         } else {
             filteredCategoryManga
         }
+        // Pinned chapters are never deleted, regardless of the bookmark setting
+        return withoutBookmarked.filterNot { chapterPinStore.isPinned(manga, it) }
     }
 
     fun statusFlow(): Flow<Download> = queueState

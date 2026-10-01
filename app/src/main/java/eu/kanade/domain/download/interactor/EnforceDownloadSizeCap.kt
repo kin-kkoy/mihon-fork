@@ -2,6 +2,7 @@ package eu.kanade.domain.download.interactor
 
 import android.content.Context
 import android.text.format.Formatter
+import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.DownloadProvider
@@ -18,12 +19,14 @@ import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.storage.service.StorageManager
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 /**
  * Enforces the user-configured maximum total download size. When the downloads
  * directory exceeds the cap, the oldest already-READ downloaded chapters are
  * deleted until the total is back under the cap. Unread chapters are never
- * touched, so nothing you still intend to read is lost.
+ * touched, so nothing you still intend to read is lost. Pinned chapters are never evicted.
  */
 class EnforceDownloadSizeCap(
     private val context: Context,
@@ -34,6 +37,7 @@ class EnforceDownloadSizeCap(
     private val downloadProvider: DownloadProvider,
     private val downloadManager: DownloadManager,
     private val sourceManager: SourceManager,
+    private val chapterPinStore: ChapterPinStore = Injekt.get(),
 ) {
 
     suspend fun await() = withIOContext {
@@ -46,12 +50,17 @@ class EnforceDownloadSizeCap(
 
         // Collect every already-read, downloaded chapter as an eviction candidate.
         val candidates = mutableListOf<Candidate>()
+        // Skip what DownloadManager.deleteChapters would refuse to delete anyway, so the
+        // running total stays accurate: pinned chapters, and bookmarked ones unless allowed.
+        val keepBookmarked = !downloadPreferences.removeBookmarkedChapters.get()
         getLibraryManga.await().forEach { libraryManga ->
             val manga = libraryManga.manga
             val source = sourceManager.getOrStub(manga.source)
             getChaptersByMangaId.await(manga.id)
                 .asSequence()
                 .filter { it.read }
+                .filterNot { keepBookmarked && it.bookmark }
+                .filterNot { chapterPinStore.isPinned(manga, it) }
                 .forEach { chapter ->
                     val dir = downloadProvider.findChapterDir(
                         chapter.name,

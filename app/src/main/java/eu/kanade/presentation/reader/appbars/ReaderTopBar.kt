@@ -3,6 +3,7 @@ package eu.kanade.presentation.reader.appbars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -18,6 +19,9 @@ fun ReaderTopBar(
     navigateUp: () -> Unit,
     bookmarked: Boolean,
     onToggleBookmarked: () -> Unit,
+    pinColor: Color?,
+    pinSectionName: String?,
+    onPinClicked: () -> Unit,
     onOpenInWebView: (() -> Unit)?,
     onOpenInBrowser: (() -> Unit)?,
     onShare: (() -> Unit)?,
@@ -27,7 +31,11 @@ fun ReaderTopBar(
         modifier = modifier,
         backgroundColor = Color.Transparent,
         title = mangaTitle,
-        subtitle = chapterTitle,
+        subtitle = if (pinSectionName != null && chapterTitle != null) {
+            "$chapterTitle · $pinSectionName"
+        } else {
+            chapterTitle
+        },
         navigateUp = navigateUp,
         actions = {
             AppBarActions(
@@ -46,7 +54,16 @@ fun ReaderTopBar(
                             } else {
                                 Icons.Outlined.BookmarkBorder
                             },
+                            iconTint = pinColor,
                             onClick = onToggleBookmarked,
+                        ),
+                    )
+                    add(
+                        AppBar.Action(
+                            title = "Pin to…",
+                            icon = Icons.Outlined.PushPin,
+                            iconTint = pinColor,
+                            onClick = onPinClicked,
                         ),
                     )
                     onOpenInWebView?.let {

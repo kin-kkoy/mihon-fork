@@ -9,6 +9,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.chapter.model.toDbChapter
+import eu.kanade.domain.chapter.service.ChapterPinStore
+import eu.kanade.domain.chapter.service.ResolvedPin
 import eu.kanade.domain.manga.interactor.SetMangaViewerFlags
 import eu.kanade.domain.manga.model.readerOrientation
 import eu.kanade.domain.manga.model.readingMode
@@ -97,6 +99,7 @@ class ReaderViewModel @JvmOverloads constructor(
     private val setMangaViewerFlags: SetMangaViewerFlags = Injekt.get(),
     private val getIncognitoState: GetIncognitoState = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
+    val chapterPinStore: ChapterPinStore = Injekt.get(),
 ) : ViewModel() {
 
     private val mutableState = MutableStateFlow(State())
@@ -326,6 +329,7 @@ class ReaderViewModel @JvmOverloads constructor(
                 it.copy(
                     viewerChapters = newChapters,
                     bookmarked = newChapters.currChapter.chapter.bookmark,
+                    pin = pinFor(newChapters.currChapter),
                 )
             }
         }
@@ -641,6 +645,14 @@ class ReaderViewModel @JvmOverloads constructor(
         val bookmarked = !chapter.bookmark
         chapter.bookmark = bookmarked
 
+        // Removing a bookmark also unpins the chapter
+        if (!bookmarked) {
+            val manga = manga
+            val domainChapter = chapter.toDomainChapter()
+            if (manga != null && domainChapter != null) chapterPinStore.unpin(manga, listOf(domainChapter))
+            mutableState.update { it.copy(pin = null) }
+        }
+
         viewModelScope.launchNonCancellable {
             updateChapter.await(
                 ChapterUpdate(
@@ -655,6 +667,41 @@ class ReaderViewModel @JvmOverloads constructor(
                 bookmarked = bookmarked,
             )
         }
+    }
+
+    private fun pinFor(readerChapter: ReaderChapter): ResolvedPin? {
+        val manga = manga ?: return null
+        val chapter = readerChapter.chapter.toDomainChapter() ?: return null
+        val pin = chapterPinStore.getPins()[ChapterPinStore.key(manga, chapter)] ?: return null
+        val section = chapterPinStore.getSections().find { it.id == pin.section } ?: return null
+        return ResolvedPin(section, pin.note)
+    }
+
+    fun openPinDialog() {
+        mutableState.update { it.copy(dialog = Dialog.PinChapter) }
+    }
+
+    /** Pins the current chapter to [sectionId]; pinned chapters are always bookmarked too. */
+    fun pinCurrentChapter(sectionId: Long, note: String) {
+        val readerChapter = getCurrentChapter() ?: return
+        val manga = manga ?: return
+        val chapter = readerChapter.chapter.toDomainChapter() ?: return
+        chapterPinStore.pin(manga, listOf(chapter), sectionId, note)
+        if (!readerChapter.chapter.bookmark) {
+            readerChapter.chapter.bookmark = true
+            viewModelScope.launchNonCancellable {
+                updateChapter.await(ChapterUpdate(id = chapter.id, bookmark = true))
+            }
+        }
+        mutableState.update { it.copy(bookmarked = true, pin = pinFor(readerChapter), dialog = null) }
+    }
+
+    /** Unpins the current chapter; it stays bookmarked. */
+    fun unpinCurrentChapter() {
+        val manga = manga ?: return
+        val chapter = getCurrentChapter()?.chapter?.toDomainChapter() ?: return
+        chapterPinStore.unpin(manga, listOf(chapter))
+        mutableState.update { it.copy(pin = null, dialog = null) }
     }
 
     /**
@@ -928,6 +975,7 @@ class ReaderViewModel @JvmOverloads constructor(
         val manga: Manga? = null,
         val viewerChapters: ViewerChapters? = null,
         val bookmarked: Boolean = false,
+        val pin: ResolvedPin? = null,
         val isLoadingAdjacentChapter: Boolean = false,
         val currentPage: Int = -1,
 
@@ -952,6 +1000,7 @@ class ReaderViewModel @JvmOverloads constructor(
         data object ReadingModeSelect : Dialog
         data object OrientationModeSelect : Dialog
         data class PageActions(val page: ReaderPage) : Dialog
+        data object PinChapter : Dialog
     }
 
     sealed interface Event {

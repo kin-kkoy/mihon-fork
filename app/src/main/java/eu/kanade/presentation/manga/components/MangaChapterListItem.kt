@@ -1,5 +1,6 @@
 package eu.kanade.presentation.manga.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.outlined.BookmarkRemove
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Done
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.FileDownloadOff
 import androidx.compose.material.icons.outlined.RemoveDone
 import androidx.compose.material3.Icon
@@ -31,6 +33,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
@@ -64,6 +71,9 @@ fun MangaChapterListItem(
     onDownloadClick: ((ChapterDownloadAction) -> Unit)?,
     onChapterSwipe: (LibraryPreferences.ChapterSwipeAction) -> Unit,
     modifier: Modifier = Modifier,
+    // Pinned to a user section: tints the bookmark, adds a colored stripe + glow and shows the note
+    pinColor: Color? = null,
+    pinNote: String? = null,
 ) {
     val start = getSwipeAction(
         action = chapterSwipeStartAction,
@@ -91,6 +101,7 @@ fun MangaChapterListItem(
     ) {
         Row(
             modifier = modifier
+                .then(if (pinColor != null && !selected) Modifier.pinnedGlow(pinColor) else Modifier)
                 .selectedBackground(selected)
                 .combinedClickable(
                     onClick = onClick,
@@ -117,13 +128,13 @@ fun MangaChapterListItem(
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
-                    if (bookmark) {
+                    if (bookmark || pinColor != null) {
                         Icon(
                             imageVector = Icons.Filled.Bookmark,
                             contentDescription = stringResource(MR.strings.action_filter_bookmarked),
                             modifier = Modifier
                                 .sizeIn(maxHeight = with(LocalDensity.current) { textHeight.toDp() - 2.dp }),
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = pinColor ?: MaterialTheme.colorScheme.primary,
                         )
                     }
                     Text(
@@ -134,6 +145,27 @@ fun MangaChapterListItem(
                         onTextLayout = { textHeight = it.size.height },
                         color = LocalContentColor.current.copy(alpha = if (read) DISABLED_ALPHA else 1f),
                     )
+                }
+
+                if (pinColor != null && !pinNote.isNullOrBlank()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.EditNote,
+                            contentDescription = null,
+                            tint = pinColor,
+                            modifier = Modifier.height(14.dp),
+                        )
+                        Text(
+                            text = pinNote,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = pinColor,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
 
                 Row {
@@ -181,6 +213,19 @@ fun MangaChapterListItem(
         }
     }
 }
+
+private fun Modifier.pinnedGlow(color: Color): Modifier = this
+    .background(Brush.horizontalGradient(0f to color.copy(alpha = 0.14f), 0.7f to Color.Transparent))
+    .drawBehind {
+        val inset = 8.dp.toPx()
+        val width = 3.dp.toPx()
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(0f, inset),
+            size = Size(width, size.height - inset * 2),
+            cornerRadius = CornerRadius(width, width),
+        )
+    }
 
 private fun getSwipeAction(
     action: LibraryPreferences.ChapterSwipeAction,

@@ -16,6 +16,10 @@ import eu.kanade.core.util.addOrRemove
 import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.chapter.interactor.GetAvailableScanlators
 import eu.kanade.domain.chapter.interactor.SetReadStatus
+import eu.kanade.domain.chapter.service.ChapterPin
+import eu.kanade.domain.chapter.service.ChapterPinStore
+import eu.kanade.domain.chapter.service.PinSection
+import eu.kanade.domain.chapter.service.ResolvedPin
 import eu.kanade.domain.manga.interactor.GetExcludedScanlators
 import eu.kanade.domain.manga.interactor.SetExcludedScanlators
 import eu.kanade.domain.manga.interactor.UpdateManga
@@ -101,6 +105,7 @@ class MangaScreenModel(
     private val mangaRepository: MangaRepository = Injekt.get(),
     private val filterChaptersForDownload: FilterChaptersForDownload = Injekt.get(),
     private val updateMangaFromRemote: UpdateMangaFromRemote = Injekt.get(),
+    val chapterPinStore: ChapterPinStore = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<MangaScreenModel.State>(State.Loading) {
 
@@ -188,6 +193,15 @@ class MangaScreenModel(
         observeDownloads()
 
         screenModelScope.launchIO {
+            combine(chapterPinStore.sections, chapterPinStore.pins) { sections, pins -> sections to pins }
+                .flowWithLifecycle(lifecycle)
+                .distinctUntilChanged()
+                .collectLatest { (sections, pins) ->
+                    updateSuccessState { it.copy(pinSections = sections, pinData = pins) }
+                }
+        }
+
+        screenModelScope.launchIO {
             val manga = getMangaAndChapters.awaitManga(mangaId)
             val chapters = getMangaAndChapters.awaitChapters(mangaId, applyScanlatorFilter = true)
                 .toChapterListItems(manga)
@@ -211,6 +225,8 @@ class MangaScreenModel(
                     isRefreshingData = needRefreshInfo || needRefreshChapter,
                     dialog = null,
                     hideMissingChapters = libraryPreferences.hideMissingChapters.get(),
+                    pinSections = chapterPinStore.getSections(),
+                    pinData = chapterPinStore.getPins(),
                 )
             }
 
@@ -725,6 +741,8 @@ class MangaScreenModel(
      * @param chapters the list of chapters to bookmark.
      */
     fun bookmarkChapters(chapters: List<Chapter>, bookmarked: Boolean) {
+        // Removing a bookmark also unpins the chapter
+        if (!bookmarked) manga?.let { chapterPinStore.unpin(it, chapters) }
         screenModelScope.launchIO {
             chapters
                 .filterNot { it.bookmark == bookmarked }
@@ -948,6 +966,45 @@ class MangaScreenModel(
         }
     }
 
+    // Chapter pins
+
+    fun showPinDialog(chapters: List<Chapter>) {
+        updateSuccessState { it.copy(dialog = Dialog.PinChapters(chapters)) }
+    }
+
+    /** Pins [chapters] to [sectionId] with [note]; pinned chapters are always bookmarked too. */
+    fun pinChapters(chapters: List<Chapter>, sectionId: Long, note: String) {
+        val manga = manga ?: return
+        chapterPinStore.pin(manga, chapters, sectionId, note)
+        screenModelScope.launchIO {
+            chapters
+                .filterNot { it.bookmark }
+                .map { ChapterUpdate(id = it.id, bookmark = true) }
+                .let { updateChapter.awaitAll(it) }
+        }
+        toggleAllSelection(false)
+        dismissDialog()
+    }
+
+    /** Unpins [chapters]; they stay bookmarked. */
+    fun unpinChapters(chapters: List<Chapter>) {
+        val manga = manga ?: return
+        chapterPinStore.unpin(manga, chapters)
+        toggleAllSelection(false)
+        dismissDialog()
+    }
+
+    fun setPinFilter(filter: PinFilter) {
+        updateSuccessState { it.copy(pinFilter = filter) }
+    }
+
+    fun togglePinSectionExpanded(sectionId: Long) {
+        updateSuccessState {
+            val expanded = it.expandedPinSections
+            it.copy(expandedPinSections = if (sectionId in expanded) expanded - sectionId else expanded + sectionId)
+        }
+    }
+
     // Chapters list - end
 
     sealed interface Dialog {
@@ -956,6 +1013,7 @@ class MangaScreenModel(
             val initialSelection: List<CheckboxState<Category>>,
         ) : Dialog
         data class DeleteChapters(val chapters: List<Chapter>) : Dialog
+        data class PinChapters(val chapters: List<Chapter>) : Dialog
         data class DuplicateManga(val manga: Manga, val duplicates: List<MangaWithChapterCount>) : Dialog
         data class Migrate(val target: Manga, val current: Manga) : Dialog
         data class SetFetchInterval(val manga: Manga) : Dialog
@@ -1006,7 +1064,30 @@ class MangaScreenModel(
             val dialog: Dialog? = null,
             val hasPromptedToAddBefore: Boolean = false,
             val hideMissingChapters: Boolean = false,
+            val pinSections: List<PinSection> = emptyList(),
+            val pinData: Map<String, ChapterPin> = emptyMap(),
+            val pinFilter: PinFilter = PinFilter.All,
+            val expandedPinSections: Set<Long> = emptySet(),
         ) : State {
+            /** Pins of this manga's chapters, by chapter id (only pins whose section still exists). */
+            val pinByChapterId: Map<Long, ResolvedPin> by lazy {
+                if (pinData.isEmpty()) return@lazy emptyMap()
+                val sectionsById = pinSections.associateBy { it.id }
+                buildMap {
+                    chapters.forEach { item ->
+                        val pin = pinData[ChapterPinStore.key(manga, item.chapter)] ?: return@forEach
+                        val section = sectionsById[pin.section] ?: return@forEach
+                        put(item.id, ResolvedPin(section, pin.note))
+                    }
+                }
+            }
+
+            /** Sections that have at least one pinned chapter in this manga, in section order. */
+            val usedPinSections: List<PinSection> by lazy {
+                val used = pinByChapterId.values.map { it.section.id }.toSet()
+                pinSections.filter { it.id in used }
+            }
+
             val processedChapters by lazy {
                 chapters.applyFilters(manga).toList()
             }
@@ -1065,10 +1146,26 @@ class MangaScreenModel(
                     .filter { (chapter) -> applyFilter(unreadFilter) { !chapter.read } }
                     .filter { (chapter) -> applyFilter(bookmarkedFilter) { chapter.bookmark } }
                     .filter { applyFilter(downloadedFilter) { it.isDownloaded || isLocalManga } }
+                    .filter {
+                        when (val f = pinFilter) {
+                            PinFilter.All -> true
+                            PinFilter.Bookmarked -> it.chapter.bookmark || it.id in pinByChapterId
+                            is PinFilter.Section -> f.id !in pinSections.map { s -> s.id } ||
+                                pinByChapterId[it.id]?.section?.id == f.id
+                        }
+                    }
                     .sortedWith { (chapter1), (chapter2) -> getChapterSort(manga).invoke(chapter1, chapter2) }
             }
         }
     }
+}
+
+/** Session-only quick filter from the chip row above the chapter list. */
+@Immutable
+sealed interface PinFilter {
+    data object All : PinFilter
+    data object Bookmarked : PinFilter
+    data class Section(val id: Long) : PinFilter
 }
 
 @Immutable

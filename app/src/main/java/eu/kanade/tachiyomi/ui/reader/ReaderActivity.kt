@@ -49,6 +49,7 @@ import com.google.android.material.transition.platform.MaterialContainerTransfor
 import com.hippo.unifile.UniFile
 import eu.kanade.core.util.ifSourcesLoaded
 import eu.kanade.domain.base.BasePreferences
+import eu.kanade.presentation.manga.components.ChapterPinDialog
 import eu.kanade.presentation.reader.DisplayRefreshHost
 import eu.kanade.presentation.reader.OrientationSelectDialog
 import eu.kanade.presentation.reader.ReaderContentOverlay
@@ -106,6 +107,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.ByteArrayOutputStream
 import kotlin.time.Duration.Companion.seconds
+import androidx.compose.ui.graphics.Color as ComposeColor
 
 class ReaderActivity : BaseActivity() {
 
@@ -293,6 +295,18 @@ class ReaderActivity : BaseActivity() {
                     },
                 )
             }
+            is ReaderViewModel.Dialog.PinChapter -> {
+                ChapterPinDialog(
+                    store = viewModel.chapterPinStore,
+                    chapterCount = 1,
+                    initialSectionId = state.pin?.section?.id,
+                    initialNote = state.pin?.note.orEmpty(),
+                    canUnpin = state.pin != null,
+                    onPin = viewModel::pinCurrentChapter,
+                    onUnpin = viewModel::unpinCurrentChapter,
+                    onDismissRequest = onDismissRequest,
+                )
+            }
             is ReaderViewModel.Dialog.Settings -> {
                 ReaderSettingsDialog(
                     onDismissRequest = onDismissRequest,
@@ -477,6 +491,9 @@ class ReaderActivity : BaseActivity() {
             onClickTopAppBar = ::openMangaScreen,
             bookmarked = state.bookmarked,
             onToggleBookmarked = viewModel::toggleChapterBookmark,
+            pinColor = state.pin?.let { ComposeColor(it.section.color) },
+            pinSectionName = state.pin?.section?.name,
+            onPinClicked = viewModel::openPinDialog,
             onOpenInWebView = ::openChapterInWebView.takeIf { isHttpSource },
             onOpenInBrowser = ::openChapterInBrowser.takeIf { isHttpSource },
             onShare = ::shareChapter.takeIf { isHttpSource },

@@ -26,12 +26,14 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifSourcesLoaded
 import eu.kanade.domain.manga.model.hasCustomCover
 import eu.kanade.domain.manga.model.toSManga
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.manga.ChapterSettingsDialog
 import eu.kanade.presentation.manga.DuplicateMangaDialog
 import eu.kanade.presentation.manga.EditCoverAction
 import eu.kanade.presentation.manga.MangaScreen
+import eu.kanade.presentation.manga.components.ChapterPinDialog
 import eu.kanade.presentation.manga.components.DeleteChaptersDialog
 import eu.kanade.presentation.manga.components.MangaCoverDialog
 import eu.kanade.presentation.manga.components.ScanlatorFilterDialog
@@ -48,10 +50,7 @@ import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.manga.notes.MangaNotesScreen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
-import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.ui.security.RepressManager
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.system.copyToClipboard
@@ -66,6 +65,8 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.presentation.core.screens.LoadingScreen
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 class MangaScreen(
     private val mangaId: Long,
@@ -167,6 +168,9 @@ class MangaScreen(
             onChapterSelected = screenModel::toggleSelection,
             onAllChapterSelected = screenModel::toggleAllSelection,
             onInvertSelection = screenModel::invertSelection,
+            onPinClicked = screenModel::showPinDialog,
+            onPinFilterChange = screenModel::setPinFilter,
+            onTogglePinSection = screenModel::togglePinSectionExpanded,
         )
 
         var showScanlatorsDialog by remember { mutableStateOf(false) }
@@ -191,6 +195,20 @@ class MangaScreen(
                         screenModel.toggleAllSelection(false)
                         screenModel.deleteChapters(dialog.chapters)
                     },
+                )
+            }
+
+            is MangaScreenModel.Dialog.PinChapters -> {
+                val existing = dialog.chapters.singleOrNull()?.let { successState.pinByChapterId[it.id] }
+                ChapterPinDialog(
+                    store = screenModel.chapterPinStore,
+                    chapterCount = dialog.chapters.size,
+                    initialSectionId = existing?.section?.id,
+                    initialNote = existing?.note.orEmpty(),
+                    canUnpin = dialog.chapters.any { it.id in successState.pinByChapterId },
+                    onPin = { sectionId, note -> screenModel.pinChapters(dialog.chapters, sectionId, note) },
+                    onUnpin = { screenModel.unpinChapters(dialog.chapters) },
+                    onDismissRequest = onDismissRequest,
                 )
             }
 
