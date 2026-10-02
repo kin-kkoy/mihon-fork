@@ -230,7 +230,7 @@ fun MangaChapterListItem(
 }
 
 /** Glow in the first color plus a left stripe split evenly between all [colors]. */
-private fun Modifier.pinnedGlow(colors: List<Color>): Modifier = this
+internal fun Modifier.pinnedGlow(colors: List<Color>): Modifier = this
     .background(Brush.horizontalGradient(0f to colors.first().copy(alpha = 0.14f), 0.7f to Color.Transparent))
     .drawBehind {
         val inset = 8.dp.toPx()

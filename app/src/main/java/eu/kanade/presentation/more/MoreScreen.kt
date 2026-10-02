@@ -65,6 +65,7 @@ fun MoreScreen(
     onClickDownloadQueue: () -> Unit,
     onClickCategories: () -> Unit,
     onClickStats: () -> Unit,
+    onClickPinned: () -> Unit,
     onClickDataAndStorage: () -> Unit,
     onClickSettings: () -> Unit,
     onClickSupport: () -> Unit,
@@ -180,6 +181,13 @@ fun MoreScreen(
                     title = stringResource(MR.strings.label_stats),
                     icon = Icons.Outlined.QueryStats,
                     onPreferenceClick = onClickStats,
+                )
+            }
+            item {
+                TextPreferenceWidget(
+                    title = "Pinned",
+                    icon = ImageVector.vectorResource(R.drawable.ic_bookmark_pin_24dp),
+                    onPreferenceClick = onClickPinned,
                 )
             }
             item {
