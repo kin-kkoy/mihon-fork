@@ -87,6 +87,19 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
         savePins(current - keys)
     }
 
+    /**
+     * Copies pins (section + note) from [fromManga]'s chapters to the matching [toManga] chapters,
+     * e.g. after a migration. [pairs] maps each old chapter to its new counterpart.
+     */
+    @Synchronized
+    fun copyPins(fromManga: Manga, toManga: Manga, pairs: List<Pair<Chapter, Chapter>>) {
+        val current = getPins()
+        val copied = pairs.mapNotNull { (old, new) ->
+            current[key(fromManga, old)]?.let { key(toManga, new) to it }
+        }
+        if (copied.isNotEmpty()) savePins(current + copied)
+    }
+
     // Sections
 
     @Synchronized

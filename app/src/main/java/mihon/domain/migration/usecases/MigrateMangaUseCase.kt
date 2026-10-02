@@ -1,5 +1,6 @@
 package mihon.domain.migration.usecases
 
+import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.manga.model.hasCustomCover
 import eu.kanade.domain.source.service.SourcePreferences
@@ -12,10 +13,13 @@ import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.UpdateChapter
+import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.model.toChapterUpdate
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.source.service.SourceManager
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.time.Instant
 
 class MigrateMangaUseCase(
@@ -29,6 +33,7 @@ class MigrateMangaUseCase(
     private val setMangaCategories: SetMangaCategories,
     private val coverCache: CoverCache,
     private val updateMangaFromRemote: UpdateMangaFromRemote,
+    private val chapterPinStore: ChapterPinStore = Injekt.get(),
 ) {
 
     suspend operator fun invoke(current: Manga, target: Manga, replace: Boolean) {
@@ -44,6 +49,9 @@ class MigrateMangaUseCase(
                 val prevMangaChapters = getChaptersByMangaId.await(current.id)
                 val mangaChapters = getChaptersByMangaId.await(target.id)
 
+                // Matched (old chapter, new chapter) pairs, used to carry over pins and notes
+                val matchedChapters = mutableListOf<Pair<Chapter, Chapter>>()
+
                 val maxChapterRead = prevMangaChapters
                     .filter { it.read }
                     .maxOfOrNull { it.chapterNumber }
@@ -55,6 +63,7 @@ class MigrateMangaUseCase(
                             .find { it.isRecognizedNumber && it.chapterNumber == updatedChapter.chapterNumber }
 
                         if (prevChapter != null) {
+                            matchedChapters += prevChapter to mangaChapter
                             updatedChapter = updatedChapter.copy(
                                 dateFetch = prevChapter.dateFetch,
                                 bookmark = prevChapter.bookmark,
@@ -71,6 +80,9 @@ class MigrateMangaUseCase(
 
                 val chapterUpdates = updatedMangaChapters.map { it.toChapterUpdate() }
                 updateChapter.awaitAll(chapterUpdates)
+
+                // Carry over pin sections and notes
+                chapterPinStore.copyPins(current, target, matchedChapters)
             }
 
             // Update categories
