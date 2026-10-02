@@ -3,11 +3,14 @@ package eu.kanade.presentation.manga.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Circle
@@ -71,8 +74,10 @@ fun MangaChapterListItem(
     onDownloadClick: ((ChapterDownloadAction) -> Unit)?,
     onChapterSwipe: (LibraryPreferences.ChapterSwipeAction) -> Unit,
     modifier: Modifier = Modifier,
-    // Pinned to a user section: tints the bookmark, adds a colored stripe + glow and shows the note
+    // Pinned to user sections: [pinColor] (first section) tints the bookmark and glow, each of
+    // [pinExtraColors] (other sections) adds a dot after the title, the stripe is split between all
     pinColor: Color? = null,
+    pinExtraColors: List<Color> = emptyList(),
     pinNote: String? = null,
 ) {
     val start = getSwipeAction(
@@ -101,7 +106,7 @@ fun MangaChapterListItem(
     ) {
         Row(
             modifier = modifier
-                .then(if (pinColor != null && !selected) Modifier.pinnedGlow(pinColor) else Modifier)
+                .then(if (pinColor != null && !selected) Modifier.pinnedGlow(listOf(pinColor) + pinExtraColors) else Modifier)
                 .selectedBackground(selected)
                 .combinedClickable(
                     onClick = onClick,
@@ -144,7 +149,16 @@ fun MangaChapterListItem(
                         overflow = TextOverflow.Ellipsis,
                         onTextLayout = { textHeight = it.size.height },
                         color = LocalContentColor.current.copy(alpha = if (read) DISABLED_ALPHA else 1f),
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    pinExtraColors.forEach { color ->
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 2.dp)
+                                .size(7.dp)
+                                .background(color, CircleShape),
+                        )
+                    }
                 }
 
                 if (!pinNote.isNullOrBlank()) {
@@ -215,17 +229,21 @@ fun MangaChapterListItem(
     }
 }
 
-private fun Modifier.pinnedGlow(color: Color): Modifier = this
-    .background(Brush.horizontalGradient(0f to color.copy(alpha = 0.14f), 0.7f to Color.Transparent))
+/** Glow in the first color plus a left stripe split evenly between all [colors]. */
+private fun Modifier.pinnedGlow(colors: List<Color>): Modifier = this
+    .background(Brush.horizontalGradient(0f to colors.first().copy(alpha = 0.14f), 0.7f to Color.Transparent))
     .drawBehind {
         val inset = 8.dp.toPx()
         val width = 3.dp.toPx()
-        drawRoundRect(
-            color = color,
-            topLeft = Offset(0f, inset),
-            size = Size(width, size.height - inset * 2),
-            cornerRadius = CornerRadius(width, width),
-        )
+        val segment = (size.height - inset * 2) / colors.size
+        colors.forEachIndexed { i, color ->
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(0f, inset + segment * i),
+                size = Size(width, segment),
+                cornerRadius = CornerRadius(width, width),
+            )
+        }
     }
 
 private fun getSwipeAction(

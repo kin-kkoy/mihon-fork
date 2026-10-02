@@ -203,10 +203,10 @@ class MangaScreen(
                 ChapterPinDialog(
                     store = screenModel.chapterPinStore,
                     chapterCount = dialog.chapters.size,
-                    initialSectionId = existing?.section?.id,
+                    initialSectionIds = existing?.sections.orEmpty().map { it.id },
                     initialNote = existing?.note.orEmpty(),
-                    canUnpin = dialog.chapters.any { successState.pinByChapterId[it.id]?.section != null },
-                    onPin = { sectionId, note -> screenModel.pinChapters(dialog.chapters, sectionId, note) },
+                    canUnpin = dialog.chapters.any { successState.pinByChapterId[it.id]?.sections.orEmpty().isNotEmpty() },
+                    onPin = { sectionIds, note -> screenModel.pinChapters(dialog.chapters, sectionIds, note) },
                     onUnpin = { screenModel.unpinChapters(dialog.chapters) },
                     onDismissRequest = onDismissRequest,
                 )

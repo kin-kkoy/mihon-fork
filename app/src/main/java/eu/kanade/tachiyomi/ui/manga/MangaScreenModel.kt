@@ -972,10 +972,23 @@ class MangaScreenModel(
         updateSuccessState { it.copy(dialog = Dialog.PinChapters(chapters)) }
     }
 
-    /** Pins [chapters] to [sectionId] with [note]; pinned chapters are always bookmarked too. */
-    fun pinChapters(chapters: List<Chapter>, sectionId: Long, note: String) {
+    /**
+     * Pins [chapters] to [sectionIds] with [note]; pinned chapters are always bookmarked too.
+     * One chapter: its sections and note are replaced (the dialog showed the current ones).
+     * Several chapters: the sections are added to each, and the note is only set when typed.
+     */
+    fun pinChapters(chapters: List<Chapter>, sectionIds: List<Long>, note: String) {
         val manga = manga ?: return
-        chapterPinStore.pin(manga, chapters, sectionId, note)
+        if (chapters.size == 1) {
+            chapterPinStore.pin(manga, chapters, sectionIds, note)
+        } else {
+            val pins = chapterPinStore.getPins()
+            chapters.forEach { chapter ->
+                val old = pins[ChapterPinStore.key(manga, chapter)]
+                val ids = (old?.sectionIds.orEmpty() + sectionIds).distinct()
+                chapterPinStore.pin(manga, listOf(chapter), ids, note.ifBlank { old?.note.orEmpty() })
+            }
+        }
         screenModelScope.launchIO {
             chapters
                 .filterNot { it.bookmark }
@@ -986,10 +999,10 @@ class MangaScreenModel(
         dismissDialog()
     }
 
-    /** Removes [chapters] from their section; they stay bookmarked and keep their notes. */
+    /** Removes [chapters] from all their sections; they stay bookmarked and keep their notes. */
     fun unpinChapters(chapters: List<Chapter>) {
         val manga = manga ?: return
-        chapterPinStore.setSection(manga, chapters, null)
+        chapterPinStore.setSections(manga, chapters, emptyList())
         toggleAllSelection(false)
         dismissDialog()
     }
@@ -1069,23 +1082,21 @@ class MangaScreenModel(
             val pinFilter: PinFilter = PinFilter.All,
             val expandedPinSections: Set<Long> = emptySet(),
         ) : State {
-            /** Pins of this manga's chapters, by chapter id (only pins whose section still exists). */
+            /** Pins of this manga's chapters, by chapter id (deleted sections dropped). */
             val pinByChapterId: Map<Long, ResolvedPin> by lazy {
                 if (pinData.isEmpty()) return@lazy emptyMap()
-                val sectionsById = pinSections.associateBy { it.id }
                 buildMap {
                     chapters.forEach { item ->
-                        val pin = pinData[ChapterPinStore.key(manga, item.chapter)] ?: return@forEach
-                        val section = pin.section?.let { sectionsById[it] }
-                        if (section == null && pin.note.isBlank()) return@forEach
-                        put(item.id, ResolvedPin(section, pin.note))
+                        val pin = pinData[ChapterPinStore.key(manga, item.chapter)]
+                        val resolved = ChapterPinStore.resolve(pin, pinSections) ?: return@forEach
+                        put(item.id, resolved)
                     }
                 }
             }
 
             /** Sections that have at least one pinned chapter in this manga, in section order. */
             val usedPinSections: List<PinSection> by lazy {
-                val used = pinByChapterId.values.mapNotNull { it.section?.id }.toSet()
+                val used = pinByChapterId.values.flatMap { pin -> pin.sections.map { it.id } }.toSet()
                 pinSections.filter { it.id in used }
             }
 
@@ -1152,7 +1163,7 @@ class MangaScreenModel(
                             PinFilter.All -> true
                             PinFilter.Bookmarked -> it.chapter.bookmark || it.id in pinByChapterId
                             is PinFilter.Section -> f.id !in pinSections.map { s -> s.id } ||
-                                pinByChapterId[it.id]?.section?.id == f.id
+                                pinByChapterId[it.id]?.sections.orEmpty().any { s -> s.id == f.id }
                         }
                     }
                     .sortedWith { (chapter1), (chapter2) -> getChapterSort(manga).invoke(chapter1, chapter2) }

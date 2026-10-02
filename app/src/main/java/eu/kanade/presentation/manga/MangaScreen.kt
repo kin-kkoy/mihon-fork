@@ -859,7 +859,8 @@ private fun LazyListScope.sharedChapterItems(
                     onChapterSwipe = {
                         onChapterSwipe(item, it)
                     },
-                    pinColor = pins[item.id]?.section?.let { Color(it.color) },
+                    pinColor = pins[item.id]?.primary?.let { Color(it.color) },
+                    pinExtraColors = pins[item.id]?.sections.orEmpty().drop(1).map { Color(it.color) },
                     pinNote = pins[item.id]?.note,
                 )
             }
@@ -897,7 +898,9 @@ private fun LazyListScope.chapterPinItems(
     if (state.pinFilter != PinFilter.All) return
 
     sections.forEach { section ->
-        val pinned = state.processedChapters.filter { state.pinByChapterId[it.id]?.section?.id == section.id }
+        val pinned = state.processedChapters.filter { item ->
+            state.pinByChapterId[item.id]?.sections.orEmpty().any { it.id == section.id }
+        }
         if (pinned.isEmpty()) return@forEach
         val expanded = section.id in state.expandedPinSections
         item(key = "pin-section-${section.id}", contentType = "pin-section") {

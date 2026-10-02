@@ -45,17 +45,17 @@ import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.domain.chapter.service.PinSection
 
 /**
- * "Pin to section" sheet: pick (or create / manage) a section, add an optional note,
+ * "Pin to sections" sheet: tick (or create / manage) sections, add an optional note,
  * optionally from the user's own presets.
  */
 @Composable
 fun ChapterPinDialog(
     store: ChapterPinStore,
     chapterCount: Int,
-    initialSectionId: Long?,
+    initialSectionIds: List<Long>,
     initialNote: String,
     canUnpin: Boolean,
-    onPin: (sectionId: Long, note: String) -> Unit,
+    onPin: (sectionIds: List<Long>, note: String) -> Unit,
     onUnpin: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
@@ -63,7 +63,7 @@ fun ChapterPinDialog(
     val pins by store.pins.collectAsState(store.getPins())
     val presets by store.presets.collectAsState(emptyList())
 
-    var pick by remember { mutableStateOf(initialSectionId) }
+    var picks by remember { mutableStateOf(initialSectionIds) }
     var note by remember { mutableStateOf(initialNote) }
     var managing by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
@@ -71,13 +71,13 @@ fun ChapterPinDialog(
     var newColor by remember { mutableStateOf(ChapterPinStore.PALETTE[sections.size % ChapterPinStore.PALETTE.size]) }
     var managingPresets by remember { mutableStateOf(false) }
 
-    val validPick = pick?.takeIf { id -> sections.any { it.id == id } }
+    val validPicks = picks.filter { id -> sections.any { it.id == id } }
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "Pin to section", modifier = Modifier.weight(1f))
+                Text(text = "Pin to sections", modifier = Modifier.weight(1f))
                 if (sections.isNotEmpty()) {
                     TextButton(onClick = { managing = !managing; adding = false }) {
                         Text(if (managing) "Done" else "Manage")
@@ -93,6 +93,7 @@ fun ChapterPinDialog(
                 Text(
                     text = buildString {
                         append(if (chapterCount == 1) "1 chapter" else "$chapterCount chapters")
+                        if (chapterCount > 1 && !managing) append(" · ticked sections are added to each")
                         if (managing) append(" · rename, recolor or delete sections")
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -119,15 +120,15 @@ fun ChapterPinDialog(
                             },
                             onDelete = {
                                 store.deleteSection(section.id)
-                                if (pick == section.id) pick = null
+                                picks = picks - section.id
                             },
                         )
                     } else {
                         SectionOption(
                             section = section,
-                            count = pins.values.count { it.section == section.id },
-                            selected = validPick == section.id,
-                            onClick = { pick = section.id },
+                            count = pins.values.count { section.id in it.sectionIds },
+                            selected = section.id in validPicks,
+                            onClick = { picks = if (section.id in picks) picks - section.id else picks + section.id },
                         )
                     }
                 }
@@ -150,7 +151,7 @@ fun ChapterPinDialog(
                         TextButton(
                             enabled = newName.isNotBlank(),
                             onClick = {
-                                pick = store.addSection(newName, newColor)
+                                picks = picks + store.addSection(newName, newColor)
                                 adding = false
                                 newName = ""
                                 newColor = ChapterPinStore.PALETTE[(sections.size + 1) % ChapterPinStore.PALETTE.size]
@@ -230,8 +231,8 @@ fun ChapterPinDialog(
                 TextButton(onClick = { managing = false }) { Text("Done") }
             } else {
                 TextButton(
-                    enabled = validPick != null,
-                    onClick = { validPick?.let { onPin(it, note) } },
+                    enabled = validPicks.isNotEmpty(),
+                    onClick = { onPin(validPicks, note) },
                 ) { Text("Pin") }
             }
         },

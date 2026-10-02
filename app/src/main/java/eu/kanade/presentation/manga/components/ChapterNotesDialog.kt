@@ -3,9 +3,11 @@ package eu.kanade.presentation.manga.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -17,7 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -43,18 +44,18 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.domain.chapter.service.ChapterPinStore
 
 /**
- * Reader notes dialog: the note (and the user's presets) is the main part; "Pin to section"
+ * Reader notes dialog: the note (and the user's presets) is the main part; "Pin to sections"
  * sits below in a collapsible accordion. Saving with a note but no section is allowed.
  */
 @Composable
 fun ChapterNotesDialog(
     store: ChapterPinStore,
     subtitle: String?,
-    initialSectionId: Long?,
+    initialSectionIds: List<Long>,
     initialNote: String,
     startWithNewSection: Boolean,
     canClear: Boolean,
-    onSave: (sectionId: Long?, note: String) -> Unit,
+    onSave: (sectionIds: List<Long>, note: String) -> Unit,
     onClear: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
@@ -62,7 +63,7 @@ fun ChapterNotesDialog(
     val presets by store.presets.collectAsState(emptyList())
 
     var note by remember { mutableStateOf(initialNote) }
-    var pick by remember { mutableStateOf(initialSectionId) }
+    var picks by remember { mutableStateOf(initialSectionIds) }
     var accordionOpen by remember { mutableStateOf(startWithNewSection) }
     var managing by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(startWithNewSection) }
@@ -70,7 +71,7 @@ fun ChapterNotesDialog(
     var newColor by remember { mutableStateOf(ChapterPinStore.PALETTE[sections.size % ChapterPinStore.PALETTE.size]) }
     var managingPresets by remember { mutableStateOf(false) }
 
-    val picked = sections.find { it.id == pick }
+    val picked = sections.filter { it.id in picks }
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
@@ -154,7 +155,7 @@ fun ChapterNotesDialog(
                     onClick = { store.addPreset(note) },
                 ) { Text("+ Save as preset") }
 
-                // "Pin to section" accordion
+                // "Pin to sections" accordion
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -170,23 +171,22 @@ fun ChapterNotesDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text("Pin to section", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        Text("Pin to sections", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                         Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
-                                if (picked != null) {
-                                    Icon(
-                                        Icons.Filled.Bookmark,
-                                        null,
-                                        Modifier.size(14.dp),
-                                        tint = Color(picked.color),
-                                    )
+                                picked.forEach {
+                                    Box(Modifier.size(8.dp).background(Color(it.color), CircleShape))
                                 }
                                 Text(
-                                    text = picked?.name ?: "None",
+                                    text = when (picked.size) {
+                                        0 -> "None"
+                                        1 -> picked[0].name
+                                        else -> "${picked[0].name} +${picked.size - 1}"
+                                    },
                                     style = MaterialTheme.typography.labelMedium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -208,7 +208,7 @@ fun ChapterNotesDialog(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = if (managing) "Rename, recolor or delete" else "Tap to choose, tap again to clear",
+                                    text = if (managing) "Rename, recolor or delete" else "Tap to add or remove (pick several)",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.weight(1f),
@@ -231,15 +231,17 @@ fun ChapterNotesDialog(
                                         },
                                         onDelete = {
                                             store.deleteSection(section.id)
-                                            if (pick == section.id) pick = null
+                                            picks = picks - section.id
                                         },
                                     )
                                 } else {
                                     SectionOption(
                                         section = section,
                                         count = null,
-                                        selected = pick == section.id,
-                                        onClick = { pick = if (pick == section.id) null else section.id },
+                                        selected = section.id in picks,
+                                        onClick = {
+                                            picks = if (section.id in picks) picks - section.id else picks + section.id
+                                        },
                                     )
                                 }
                             }
@@ -261,7 +263,7 @@ fun ChapterNotesDialog(
                                     TextButton(
                                         enabled = newName.isNotBlank(),
                                         onClick = {
-                                            pick = store.addSection(newName, newColor)
+                                            picks = picks + store.addSection(newName, newColor)
                                             adding = false
                                             newName = ""
                                             newColor = ChapterPinStore.PALETTE[
@@ -279,7 +281,7 @@ fun ChapterNotesDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(pick?.takeIf { id -> sections.any { it.id == id } }, note) }) {
+            TextButton(onClick = { onSave(picks.filter { id -> sections.any { it.id == id } }, note) }) {
                 Text("Save")
             }
         },

@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Checkbox
@@ -54,8 +53,8 @@ fun ReaderTopBar(
     pin: ResolvedPin?,
     pinStore: ChapterPinStore,
     onBookmarkTap: () -> Unit,
-    onPinToSection: (Long) -> Unit,
-    onUnpinFromSection: () -> Unit,
+    onToggleSection: (Long) -> Unit,
+    onUnpinFromSections: () -> Unit,
     onNewSection: () -> Unit,
     onOpenNotes: () -> Unit,
     onOpenInWebView: (() -> Unit)?,
@@ -63,17 +62,20 @@ fun ReaderTopBar(
     onShare: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    val sectionName = pin?.section?.name
+    val sectionLabel = pin?.primary?.let { first ->
+        val extra = pin.sections.size - 1
+        if (extra > 0) "${first.name} +$extra" else first.name
+    }
     AppBar(
         modifier = modifier,
         backgroundColor = Color.Transparent,
         title = mangaTitle,
-        subtitle = if (sectionName != null && chapterTitle != null) "$chapterTitle · $sectionName" else chapterTitle,
+        subtitle = if (sectionLabel != null && chapterTitle != null) "$chapterTitle · $sectionLabel" else chapterTitle,
         navigateUp = navigateUp,
         actions = {
             NotesButton(
                 hasNote = !pin?.note.isNullOrBlank(),
-                tint = pin?.section?.let { Color(it.color) },
+                tint = pin?.primary?.let { Color(it.color) },
                 onClick = onOpenNotes,
             )
             BookmarkPinButton(
@@ -81,8 +83,8 @@ fun ReaderTopBar(
                 pin = pin,
                 pinStore = pinStore,
                 onTap = onBookmarkTap,
-                onPinToSection = onPinToSection,
-                onUnpinFromSection = onUnpinFromSection,
+                onToggleSection = onToggleSection,
+                onUnpinFromSections = onUnpinFromSections,
                 onNewSection = onNewSection,
             )
             AppBarActions(
@@ -139,13 +141,13 @@ private fun RowScope.BookmarkPinButton(
     pin: ResolvedPin?,
     pinStore: ChapterPinStore,
     onTap: () -> Unit,
-    onPinToSection: (Long) -> Unit,
-    onUnpinFromSection: () -> Unit,
+    onToggleSection: (Long) -> Unit,
+    onUnpinFromSections: () -> Unit,
     onNewSection: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     var menuOpen by remember { mutableStateOf(false) }
-    val sectionColor = pin?.section?.let { Color(it.color) }
+    val sectionColor = pin?.primary?.let { Color(it.color) }
 
     Box {
         Box(
@@ -183,13 +185,11 @@ private fun RowScope.BookmarkPinButton(
                 pin = pin,
                 pinStore = pinStore,
                 onDismiss = { menuOpen = false },
-                onPinToSection = {
+                // Stays open so several sections can be ticked in one go
+                onToggleSection = onToggleSection,
+                onUnpinFromSections = {
                     menuOpen = false
-                    onPinToSection(it)
-                },
-                onUnpinFromSection = {
-                    menuOpen = false
-                    onUnpinFromSection()
+                    onUnpinFromSections()
                 },
                 onNewSection = {
                     menuOpen = false
@@ -205,8 +205,8 @@ private fun BookmarkPinMenu(
     pin: ResolvedPin?,
     pinStore: ChapterPinStore,
     onDismiss: () -> Unit,
-    onPinToSection: (Long) -> Unit,
-    onUnpinFromSection: () -> Unit,
+    onToggleSection: (Long) -> Unit,
+    onUnpinFromSections: () -> Unit,
     onNewSection: () -> Unit,
 ) {
     val sections by pinStore.sections.collectAsState(pinStore.getSections())
@@ -216,22 +216,19 @@ private fun BookmarkPinMenu(
 
     DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
         Text(
-            text = "PIN TO SECTION",
+            text = "PIN TO SECTIONS",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
         )
+        val pinnedIds = pin?.sections.orEmpty().map { it.id }
         sections.forEach { section ->
             DropdownMenuItem(
                 text = { Text(section.name) },
                 leadingIcon = { Icon(Icons.Filled.Bookmark, null, tint = Color(section.color)) },
-                trailingIcon = if (pin?.section?.id == section.id) {
-                    { Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.primary) }
-                } else {
-                    null
-                },
-                onClick = { onPinToSection(section.id) },
+                trailingIcon = { Checkbox(checked = section.id in pinnedIds, onCheckedChange = null) },
+                onClick = { onToggleSection(section.id) },
             )
         }
         DropdownMenuItem(
@@ -239,11 +236,11 @@ private fun BookmarkPinMenu(
             leadingIcon = { Icon(Icons.Outlined.Add, null) },
             onClick = onNewSection,
         )
-        if (pin?.section != null) {
+        if (pinnedIds.isNotEmpty()) {
             DropdownMenuItem(
-                text = { Text("Unpin (keep bookmark)") },
+                text = { Text(if (pinnedIds.size > 1) "Unpin from all (keep bookmark)" else "Unpin (keep bookmark)") },
                 leadingIcon = { Icon(Icons.Outlined.PushPin, null) },
-                onClick = onUnpinFromSection,
+                onClick = onUnpinFromSections,
             )
         }
         HorizontalDivider()

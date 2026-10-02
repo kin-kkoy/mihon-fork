@@ -654,7 +654,7 @@ class ReaderViewModel @JvmOverloads constructor(
         }
         val last = chapterPinStore.lastSection.get()
         if (chapterPinStore.quickPinToLast.get() && chapterPinStore.getSections().any { it.id == last }) {
-            pinCurrentChapterToSection(last)
+            addCurrentChapterToSection(last)
         } else {
             setBookmark(readerChapter, true)
         }
@@ -674,29 +674,40 @@ class ReaderViewModel @JvmOverloads constructor(
     private fun pinFor(readerChapter: ReaderChapter): ResolvedPin? {
         val manga = manga ?: return null
         val chapter = readerChapter.chapter.toDomainChapter() ?: return null
-        val pin = chapterPinStore.getPins()[ChapterPinStore.key(manga, chapter)] ?: return null
-        val section = pin.section?.let { id -> chapterPinStore.getSections().find { it.id == id } }
-        if (section == null && pin.note.isBlank()) return null
-        return ResolvedPin(section, pin.note)
+        return chapterPinStore.resolve(manga, chapter)
     }
 
-    /** Long-press menu: pins the current chapter to [sectionId] (keeping its note) and bookmarks it. */
-    fun pinCurrentChapterToSection(sectionId: Long) {
+    /** Adds the current chapter to [sectionId] (keeping its other sections and note) and bookmarks it. */
+    fun addCurrentChapterToSection(sectionId: Long) {
         val readerChapter = getCurrentChapter() ?: return
         val manga = manga ?: return
         val chapter = readerChapter.chapter.toDomainChapter() ?: return
-        chapterPinStore.setSection(manga, listOf(chapter), sectionId)
+        chapterPinStore.addToSection(manga, listOf(chapter), sectionId)
         chapterPinStore.lastSection.set(sectionId)
         setBookmark(readerChapter, true)
         mutableState.update { it.copy(pin = pinFor(readerChapter)) }
     }
 
-    /** Long-press menu: removes the current chapter from its section; bookmark and note stay. */
-    fun unpinCurrentChapterFromSection() {
+    /** Long-press menu checkbox: adds the current chapter to [sectionId], or removes it if already in. */
+    fun toggleCurrentChapterSection(sectionId: Long) {
         val readerChapter = getCurrentChapter() ?: return
         val manga = manga ?: return
         val chapter = readerChapter.chapter.toDomainChapter() ?: return
-        chapterPinStore.setSection(manga, listOf(chapter), null)
+        val inSection = state.value.pin?.sections.orEmpty().any { it.id == sectionId }
+        if (inSection) {
+            chapterPinStore.removeFromSection(manga, listOf(chapter), sectionId)
+            mutableState.update { it.copy(pin = pinFor(readerChapter)) }
+        } else {
+            addCurrentChapterToSection(sectionId)
+        }
+    }
+
+    /** Long-press menu: removes the current chapter from all sections; bookmark and note stay. */
+    fun unpinCurrentChapterFromSections() {
+        val readerChapter = getCurrentChapter() ?: return
+        val manga = manga ?: return
+        val chapter = readerChapter.chapter.toDomainChapter() ?: return
+        chapterPinStore.setSections(manga, listOf(chapter), emptyList())
         mutableState.update { it.copy(pin = pinFor(readerChapter)) }
     }
 
@@ -704,18 +715,18 @@ class ReaderViewModel @JvmOverloads constructor(
         mutableState.update { it.copy(dialog = Dialog.ChapterNotes(startWithNewSection)) }
     }
 
-    /** Notes dialog: saves note + section. Having either one bookmarks the chapter. */
-    fun saveChapterNotes(sectionId: Long?, note: String) {
+    /** Notes dialog: saves note + sections. Having either one bookmarks the chapter. */
+    fun saveChapterNotes(sectionIds: List<Long>, note: String) {
         val readerChapter = getCurrentChapter() ?: return
         val manga = manga ?: return
         val chapter = readerChapter.chapter.toDomainChapter() ?: return
-        chapterPinStore.pin(manga, listOf(chapter), sectionId, note)
-        if (sectionId != null) chapterPinStore.lastSection.set(sectionId)
-        if (sectionId != null || note.isNotBlank()) setBookmark(readerChapter, true)
+        chapterPinStore.pin(manga, listOf(chapter), sectionIds, note)
+        sectionIds.lastOrNull()?.let { chapterPinStore.lastSection.set(it) }
+        if (sectionIds.isNotEmpty() || note.isNotBlank()) setBookmark(readerChapter, true)
         mutableState.update { it.copy(pin = pinFor(readerChapter), dialog = null) }
     }
 
-    /** Notes dialog: removes the note and section; the bookmark stays. */
+    /** Notes dialog: removes the note and sections; the bookmark stays. */
     fun clearChapterNotes() {
         val manga = manga ?: return
         val chapter = getCurrentChapter()?.chapter?.toDomainChapter() ?: return

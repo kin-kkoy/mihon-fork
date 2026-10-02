@@ -18,16 +18,31 @@ import tachiyomi.domain.manga.model.Manga
 data class PinSection(val id: Long, val name: String, val color: Int)
 
 /**
- * A chapter's pin: an optional [section] and an optional [note]. At least one is set
+ * A chapter's pin: any number of sections plus an optional note. At least one is set
  * (a note can exist without a section; the chapter then just has a plain bookmark + note).
+ *
+ * [section] is the pre-1.9 single-section field, still read so older pins keep working;
+ * new pins only write [sections].
  */
 @Serializable
-data class ChapterPin(val section: Long? = null, val note: String = "") {
-    val isEmpty get() = section == null && note.isBlank()
+data class ChapterPin(
+    val section: Long? = null,
+    val sections: List<Long> = emptyList(),
+    val note: String = "",
+) {
+    val sectionIds: List<Long> get() = sections.ifEmpty { listOfNotNull(section) }
+    val isEmpty get() = sectionIds.isEmpty() && note.isBlank()
+
+    fun withSections(ids: List<Long>) = ChapterPin(sections = ids.distinct(), note = note)
 }
 
-/** A pin resolved against its section (null = note only), ready for display. */
-data class ResolvedPin(val section: PinSection?, val note: String)
+/**
+ * A pin resolved against the existing sections, ready for display. [sections] are in the user's
+ * section order (deleted ones dropped); the first one is the chapter's main color.
+ */
+data class ResolvedPin(val sections: List<PinSection>, val note: String) {
+    val primary: PinSection? get() = sections.firstOrNull()
+}
 
 /**
  * Stores chapter pins, pin sections and note presets as app preferences (so they are
@@ -57,23 +72,40 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
 
     fun isPinned(manga: Manga, chapter: Chapter): Boolean = key(manga, chapter) in getPins()
 
+    fun resolve(manga: Manga, chapter: Chapter): ResolvedPin? =
+        resolve(getPins()[key(manga, chapter)], getSections())
+
     // Pins
 
-    /** Sets both section and note; an empty pin (no section, blank note) removes the entry. */
+    /** Sets both sections and note; an empty pin (no sections, blank note) removes the entry. */
     @Synchronized
-    fun pin(manga: Manga, chapters: List<Chapter>, sectionId: Long?, note: String) {
-        val pin = ChapterPin(sectionId, note.trim())
+    fun pin(manga: Manga, chapters: List<Chapter>, sectionIds: List<Long>, note: String) {
+        val pin = ChapterPin(sections = sectionIds.distinct(), note = note.trim())
         val keys = chapters.map { key(manga, it) }
         savePins(if (pin.isEmpty) getPins() - keys.toSet() else getPins() + keys.associateWith { pin })
     }
 
-    /** Changes only the section (null = unpin from its section), keeping any note. */
+    /** Replaces only the sections (empty = unpin from all sections), keeping any note. */
     @Synchronized
-    fun setSection(manga: Manga, chapters: List<Chapter>, sectionId: Long?) {
+    fun setSections(manga: Manga, chapters: List<Chapter>, sectionIds: List<Long>) =
+        updateSections(manga, chapters) { sectionIds }
+
+    /** Adds [sectionId] to each chapter's sections, keeping the others and the note. */
+    @Synchronized
+    fun addToSection(manga: Manga, chapters: List<Chapter>, sectionId: Long) =
+        updateSections(manga, chapters) { it + sectionId }
+
+    /** Removes [sectionId] from each chapter's sections, keeping the others and the note. */
+    @Synchronized
+    fun removeFromSection(manga: Manga, chapters: List<Chapter>, sectionId: Long) =
+        updateSections(manga, chapters) { it - sectionId }
+
+    private fun updateSections(manga: Manga, chapters: List<Chapter>, transform: (List<Long>) -> List<Long>) {
         val current = getPins().toMutableMap()
         chapters.forEach { chapter ->
             val k = key(manga, chapter)
-            val pin = (current[k] ?: ChapterPin()).copy(section = sectionId)
+            val old = current[k] ?: ChapterPin()
+            val pin = old.withSections(transform(old.sectionIds))
             if (pin.isEmpty) current.remove(k) else current[k] = pin
         }
         savePins(current)
@@ -127,7 +159,7 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
         saveSections(getSections().filterNot { it.id == id })
         savePins(
             getPins()
-                .mapValues { (_, pin) -> if (pin.section == id) pin.copy(section = null) else pin }
+                .mapValues { (_, pin) -> if (id in pin.sectionIds) pin.withSections(pin.sectionIds - id) else pin }
                 .filterValues { !it.isEmpty },
         )
         if (lastSection.get() == id) lastSection.set(-1L)
@@ -161,6 +193,14 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
         runCatching { json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())
 
     companion object {
+        fun resolve(pin: ChapterPin?, sections: List<PinSection>): ResolvedPin? {
+            if (pin == null) return null
+            val ids = pin.sectionIds
+            val resolved = sections.filter { it.id in ids }
+            if (resolved.isEmpty() && pin.note.isBlank()) return null
+            return ResolvedPin(resolved, pin.note)
+        }
+
         fun key(manga: Manga, chapter: Chapter) = "${manga.source}|${manga.url}|${chapter.url}"
 
         /** Gold, coral, teal, sky, pink, lime — same as the approved prototype. */
