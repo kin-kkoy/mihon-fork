@@ -17,12 +17,17 @@ import tachiyomi.domain.manga.model.Manga
 @Serializable
 data class PinSection(val id: Long, val name: String, val color: Int)
 
-/** A chapter pinned to [section], with an optional [note]. */
+/**
+ * A chapter's pin: an optional [section] and an optional [note]. At least one is set
+ * (a note can exist without a section; the chapter then just has a plain bookmark + note).
+ */
 @Serializable
-data class ChapterPin(val section: Long, val note: String = "")
+data class ChapterPin(val section: Long? = null, val note: String = "") {
+    val isEmpty get() = section == null && note.isBlank()
+}
 
-/** A pin resolved against its section, ready for display. */
-data class ResolvedPin(val section: PinSection, val note: String)
+/** A pin resolved against its section (null = note only), ready for display. */
+data class ResolvedPin(val section: PinSection?, val note: String)
 
 /**
  * Stores chapter pins, pin sections and note presets as app preferences (so they are
@@ -37,6 +42,12 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
     private val pinsPref = preferenceStore.getString("chapter_pins", "{}")
     private val presetsPref = preferenceStore.getString("chapter_pin_note_presets", "[]")
 
+    /** Section last picked in the reader; -1 = none. */
+    val lastSection = preferenceStore.getLong("chapter_pin_last_section", -1L)
+
+    /** When on, tapping the reader's bookmark+pin button pins straight to [lastSection]. */
+    val quickPinToLast = preferenceStore.getBoolean("chapter_pin_quick_pin_to_last", false)
+
     val sections: Flow<List<PinSection>> = sectionsPref.changes().map(::decodeSections)
     val pins: Flow<Map<String, ChapterPin>> = pinsPref.changes().map(::decodePins)
     val presets: Flow<List<String>> = presetsPref.changes().map(::decodePresets)
@@ -48,10 +59,24 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
 
     // Pins
 
+    /** Sets both section and note; an empty pin (no section, blank note) removes the entry. */
     @Synchronized
-    fun pin(manga: Manga, chapters: List<Chapter>, sectionId: Long, note: String) {
+    fun pin(manga: Manga, chapters: List<Chapter>, sectionId: Long?, note: String) {
         val pin = ChapterPin(sectionId, note.trim())
-        savePins(getPins() + chapters.associate { key(manga, it) to pin })
+        val keys = chapters.map { key(manga, it) }
+        savePins(if (pin.isEmpty) getPins() - keys.toSet() else getPins() + keys.associateWith { pin })
+    }
+
+    /** Changes only the section (null = unpin from its section), keeping any note. */
+    @Synchronized
+    fun setSection(manga: Manga, chapters: List<Chapter>, sectionId: Long?) {
+        val current = getPins().toMutableMap()
+        chapters.forEach { chapter ->
+            val k = key(manga, chapter)
+            val pin = (current[k] ?: ChapterPin()).copy(section = sectionId)
+            if (pin.isEmpty) current.remove(k) else current[k] = pin
+        }
+        savePins(current)
     }
 
     @Synchronized
@@ -83,11 +108,16 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
         saveSections(getSections().map { if (it.id == id) it.copy(color = color) else it })
     }
 
-    /** Deletes the section and unpins its chapters (their bookmarks are kept). */
+    /** Deletes the section and unpins its chapters (their bookmarks and notes are kept). */
     @Synchronized
     fun deleteSection(id: Long) {
         saveSections(getSections().filterNot { it.id == id })
-        savePins(getPins().filterValues { it.section != id })
+        savePins(
+            getPins()
+                .mapValues { (_, pin) -> if (pin.section == id) pin.copy(section = null) else pin }
+                .filterValues { !it.isEmpty },
+        )
+        if (lastSection.get() == id) lastSection.set(-1L)
     }
 
     // Note presets

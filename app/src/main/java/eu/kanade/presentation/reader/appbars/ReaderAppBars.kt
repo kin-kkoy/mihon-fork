@@ -34,6 +34,8 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import eu.kanade.domain.chapter.service.ChapterPinStore
+import eu.kanade.domain.chapter.service.ResolvedPin
 import eu.kanade.presentation.reader.components.ChapterNavigator
 import eu.kanade.presentation.reader.components.ChapterNavigatorType
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
@@ -52,10 +54,13 @@ fun ReaderAppBars(
     navigateUp: () -> Unit,
     onClickTopAppBar: () -> Unit,
     bookmarked: Boolean,
-    onToggleBookmarked: () -> Unit,
-    pinColor: Color?,
-    pinSectionName: String?,
-    onPinClicked: () -> Unit,
+    pin: ResolvedPin?,
+    pinStore: ChapterPinStore,
+    onBookmarkTap: () -> Unit,
+    onPinToSection: (Long) -> Unit,
+    onUnpinFromSection: () -> Unit,
+    onNewSection: () -> Unit,
+    onOpenNotes: () -> Unit,
     onOpenInWebView: (() -> Unit)?,
     onOpenInBrowser: (() -> Unit)?,
     onShare: (() -> Unit)?,
@@ -97,10 +102,13 @@ fun ReaderAppBars(
                 chapterTitle = chapterTitle,
                 navigateUp = navigateUp,
                 bookmarked = bookmarked,
-                onToggleBookmarked = onToggleBookmarked,
-                pinColor = pinColor,
-                pinSectionName = pinSectionName,
-                onPinClicked = onPinClicked,
+                pin = pin,
+                pinStore = pinStore,
+                onBookmarkTap = onBookmarkTap,
+                onPinToSection = onPinToSection,
+                onUnpinFromSection = onUnpinFromSection,
+                onNewSection = onNewSection,
+                onOpenNotes = onOpenNotes,
                 onOpenInWebView = onOpenInWebView,
                 onOpenInBrowser = onOpenInBrowser,
                 onShare = onShare,

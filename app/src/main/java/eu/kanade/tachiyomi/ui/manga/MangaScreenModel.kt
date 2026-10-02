@@ -986,10 +986,10 @@ class MangaScreenModel(
         dismissDialog()
     }
 
-    /** Unpins [chapters]; they stay bookmarked. */
+    /** Removes [chapters] from their section; they stay bookmarked and keep their notes. */
     fun unpinChapters(chapters: List<Chapter>) {
         val manga = manga ?: return
-        chapterPinStore.unpin(manga, chapters)
+        chapterPinStore.setSection(manga, chapters, null)
         toggleAllSelection(false)
         dismissDialog()
     }
@@ -1076,7 +1076,8 @@ class MangaScreenModel(
                 buildMap {
                     chapters.forEach { item ->
                         val pin = pinData[ChapterPinStore.key(manga, item.chapter)] ?: return@forEach
-                        val section = sectionsById[pin.section] ?: return@forEach
+                        val section = pin.section?.let { sectionsById[it] }
+                        if (section == null && pin.note.isBlank()) return@forEach
                         put(item.id, ResolvedPin(section, pin.note))
                     }
                 }
@@ -1084,7 +1085,7 @@ class MangaScreenModel(
 
             /** Sections that have at least one pinned chapter in this manga, in section order. */
             val usedPinSections: List<PinSection> by lazy {
-                val used = pinByChapterId.values.map { it.section.id }.toSet()
+                val used = pinByChapterId.values.mapNotNull { it.section?.id }.toSet()
                 pinSections.filter { it.id in used }
             }
 

@@ -49,7 +49,7 @@ import com.google.android.material.transition.platform.MaterialContainerTransfor
 import com.hippo.unifile.UniFile
 import eu.kanade.core.util.ifSourcesLoaded
 import eu.kanade.domain.base.BasePreferences
-import eu.kanade.presentation.manga.components.ChapterPinDialog
+import eu.kanade.presentation.manga.components.ChapterNotesDialog
 import eu.kanade.presentation.reader.DisplayRefreshHost
 import eu.kanade.presentation.reader.OrientationSelectDialog
 import eu.kanade.presentation.reader.ReaderContentOverlay
@@ -107,7 +107,6 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.ByteArrayOutputStream
 import kotlin.time.Duration.Companion.seconds
-import androidx.compose.ui.graphics.Color as ComposeColor
 
 class ReaderActivity : BaseActivity() {
 
@@ -279,7 +278,7 @@ class ReaderActivity : BaseActivity() {
         }
 
         val onDismissRequest = viewModel::closeDialog
-        when (state.dialog) {
+        when (val dialog = state.dialog) {
             is ReaderViewModel.Dialog.Loading -> {
                 AlertDialog(
                     onDismissRequest = {},
@@ -295,15 +294,16 @@ class ReaderActivity : BaseActivity() {
                     },
                 )
             }
-            is ReaderViewModel.Dialog.PinChapter -> {
-                ChapterPinDialog(
+            is ReaderViewModel.Dialog.ChapterNotes -> {
+                ChapterNotesDialog(
                     store = viewModel.chapterPinStore,
-                    chapterCount = 1,
+                    subtitle = state.currentChapter?.chapter?.name,
                     initialSectionId = state.pin?.section?.id,
                     initialNote = state.pin?.note.orEmpty(),
-                    canUnpin = state.pin != null,
-                    onPin = viewModel::pinCurrentChapter,
-                    onUnpin = viewModel::unpinCurrentChapter,
+                    startWithNewSection = dialog.startWithNewSection,
+                    canClear = state.pin != null,
+                    onSave = viewModel::saveChapterNotes,
+                    onClear = viewModel::clearChapterNotes,
                     onDismissRequest = onDismissRequest,
                 )
             }
@@ -490,10 +490,13 @@ class ReaderActivity : BaseActivity() {
             navigateUp = onBackPressedDispatcher::onBackPressed,
             onClickTopAppBar = ::openMangaScreen,
             bookmarked = state.bookmarked,
-            onToggleBookmarked = viewModel::toggleChapterBookmark,
-            pinColor = state.pin?.let { ComposeColor(it.section.color) },
-            pinSectionName = state.pin?.section?.name,
-            onPinClicked = viewModel::openPinDialog,
+            pin = state.pin,
+            pinStore = viewModel.chapterPinStore,
+            onBookmarkTap = viewModel::toggleChapterBookmark,
+            onPinToSection = viewModel::pinCurrentChapterToSection,
+            onUnpinFromSection = viewModel::unpinCurrentChapterFromSection,
+            onNewSection = { viewModel.openNotesDialog(startWithNewSection = true) },
+            onOpenNotes = { viewModel.openNotesDialog() },
             onOpenInWebView = ::openChapterInWebView.takeIf { isHttpSource },
             onOpenInBrowser = ::openChapterInBrowser.takeIf { isHttpSource },
             onShare = ::shareChapter.takeIf { isHttpSource },

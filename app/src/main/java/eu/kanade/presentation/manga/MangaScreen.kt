@@ -859,7 +859,7 @@ private fun LazyListScope.sharedChapterItems(
                     onChapterSwipe = {
                         onChapterSwipe(item, it)
                     },
-                    pinColor = pins[item.id]?.let { Color(it.section.color) },
+                    pinColor = pins[item.id]?.section?.let { Color(it.color) },
                     pinNote = pins[item.id]?.note,
                 )
             }

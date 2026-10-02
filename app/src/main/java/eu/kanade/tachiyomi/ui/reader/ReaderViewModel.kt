@@ -638,66 +638,85 @@ class ReaderViewModel @JvmOverloads constructor(
     }
 
     /**
-     * Bookmarks the currently active chapter.
+     * Tap on the reader's bookmark+pin button: if bookmarked, removes the bookmark together with
+     * its pin and note; otherwise bookmarks it, pinning straight to the last-picked section when
+     * "Tap pins to last section" is on.
      */
     fun toggleChapterBookmark() {
-        val chapter = getCurrentChapter()?.chapter ?: return
-        val bookmarked = !chapter.bookmark
-        chapter.bookmark = bookmarked
-
-        // Removing a bookmark also unpins the chapter
-        if (!bookmarked) {
+        val readerChapter = getCurrentChapter() ?: return
+        if (readerChapter.chapter.bookmark) {
             val manga = manga
-            val domainChapter = chapter.toDomainChapter()
+            val domainChapter = readerChapter.chapter.toDomainChapter()
             if (manga != null && domainChapter != null) chapterPinStore.unpin(manga, listOf(domainChapter))
+            setBookmark(readerChapter, false)
             mutableState.update { it.copy(pin = null) }
+            return
         }
+        val last = chapterPinStore.lastSection.get()
+        if (chapterPinStore.quickPinToLast.get() && chapterPinStore.getSections().any { it.id == last }) {
+            pinCurrentChapterToSection(last)
+        } else {
+            setBookmark(readerChapter, true)
+        }
+    }
 
-        viewModelScope.launchNonCancellable {
-            updateChapter.await(
-                ChapterUpdate(
-                    id = chapter.id!!,
-                    bookmark = bookmarked,
-                ),
-            )
+    private fun setBookmark(readerChapter: ReaderChapter, bookmarked: Boolean) {
+        val chapter = readerChapter.chapter
+        if (chapter.bookmark != bookmarked) {
+            chapter.bookmark = bookmarked
+            viewModelScope.launchNonCancellable {
+                updateChapter.await(ChapterUpdate(id = chapter.id!!, bookmark = bookmarked))
+            }
         }
-
-        mutableState.update {
-            it.copy(
-                bookmarked = bookmarked,
-            )
-        }
+        mutableState.update { it.copy(bookmarked = bookmarked) }
     }
 
     private fun pinFor(readerChapter: ReaderChapter): ResolvedPin? {
         val manga = manga ?: return null
         val chapter = readerChapter.chapter.toDomainChapter() ?: return null
         val pin = chapterPinStore.getPins()[ChapterPinStore.key(manga, chapter)] ?: return null
-        val section = chapterPinStore.getSections().find { it.id == pin.section } ?: return null
+        val section = pin.section?.let { id -> chapterPinStore.getSections().find { it.id == id } }
+        if (section == null && pin.note.isBlank()) return null
         return ResolvedPin(section, pin.note)
     }
 
-    fun openPinDialog() {
-        mutableState.update { it.copy(dialog = Dialog.PinChapter) }
+    /** Long-press menu: pins the current chapter to [sectionId] (keeping its note) and bookmarks it. */
+    fun pinCurrentChapterToSection(sectionId: Long) {
+        val readerChapter = getCurrentChapter() ?: return
+        val manga = manga ?: return
+        val chapter = readerChapter.chapter.toDomainChapter() ?: return
+        chapterPinStore.setSection(manga, listOf(chapter), sectionId)
+        chapterPinStore.lastSection.set(sectionId)
+        setBookmark(readerChapter, true)
+        mutableState.update { it.copy(pin = pinFor(readerChapter)) }
     }
 
-    /** Pins the current chapter to [sectionId]; pinned chapters are always bookmarked too. */
-    fun pinCurrentChapter(sectionId: Long, note: String) {
+    /** Long-press menu: removes the current chapter from its section; bookmark and note stay. */
+    fun unpinCurrentChapterFromSection() {
+        val readerChapter = getCurrentChapter() ?: return
+        val manga = manga ?: return
+        val chapter = readerChapter.chapter.toDomainChapter() ?: return
+        chapterPinStore.setSection(manga, listOf(chapter), null)
+        mutableState.update { it.copy(pin = pinFor(readerChapter)) }
+    }
+
+    fun openNotesDialog(startWithNewSection: Boolean = false) {
+        mutableState.update { it.copy(dialog = Dialog.ChapterNotes(startWithNewSection)) }
+    }
+
+    /** Notes dialog: saves note + section. Having either one bookmarks the chapter. */
+    fun saveChapterNotes(sectionId: Long?, note: String) {
         val readerChapter = getCurrentChapter() ?: return
         val manga = manga ?: return
         val chapter = readerChapter.chapter.toDomainChapter() ?: return
         chapterPinStore.pin(manga, listOf(chapter), sectionId, note)
-        if (!readerChapter.chapter.bookmark) {
-            readerChapter.chapter.bookmark = true
-            viewModelScope.launchNonCancellable {
-                updateChapter.await(ChapterUpdate(id = chapter.id, bookmark = true))
-            }
-        }
-        mutableState.update { it.copy(bookmarked = true, pin = pinFor(readerChapter), dialog = null) }
+        if (sectionId != null) chapterPinStore.lastSection.set(sectionId)
+        if (sectionId != null || note.isNotBlank()) setBookmark(readerChapter, true)
+        mutableState.update { it.copy(pin = pinFor(readerChapter), dialog = null) }
     }
 
-    /** Unpins the current chapter; it stays bookmarked. */
-    fun unpinCurrentChapter() {
+    /** Notes dialog: removes the note and section; the bookmark stays. */
+    fun clearChapterNotes() {
         val manga = manga ?: return
         val chapter = getCurrentChapter()?.chapter?.toDomainChapter() ?: return
         chapterPinStore.unpin(manga, listOf(chapter))
@@ -1000,7 +1019,7 @@ class ReaderViewModel @JvmOverloads constructor(
         data object ReadingModeSelect : Dialog
         data object OrientationModeSelect : Dialog
         data class PageActions(val page: ReaderPage) : Dialog
-        data object PinChapter : Dialog
+        data class ChapterNotes(val startWithNewSection: Boolean) : Dialog
     }
 
     sealed interface Event {

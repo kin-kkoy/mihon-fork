@@ -247,9 +247,9 @@ fun ChapterPinDialog(
 }
 
 @Composable
-private fun SectionOption(
+internal fun SectionOption(
     section: PinSection,
-    count: Int,
+    count: Int?,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
@@ -271,11 +271,13 @@ private fun SectionOption(
     ) {
         Icon(Icons.Filled.Bookmark, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
         Text(text = section.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-        Text(
-            text = count.toString(),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.outline,
-        )
+        if (count != null) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
         if (selected) {
             Icon(Icons.Filled.Check, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
         }
@@ -283,7 +285,7 @@ private fun SectionOption(
 }
 
 @Composable
-private fun ManageSectionRow(
+internal fun ManageSectionRow(
     section: PinSection,
     onRename: (String) -> Unit,
     onRecolor: () -> Unit,
@@ -311,7 +313,7 @@ private fun ManageSectionRow(
 }
 
 @Composable
-private fun ColorDot(color: Color, selected: Boolean, onClick: () -> Unit) {
+internal fun ColorDot(color: Color, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(26.dp)

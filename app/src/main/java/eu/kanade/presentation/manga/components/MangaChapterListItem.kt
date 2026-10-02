@@ -147,7 +147,8 @@ fun MangaChapterListItem(
                     )
                 }
 
-                if (pinColor != null && !pinNote.isNullOrBlank()) {
+                if (!pinNote.isNullOrBlank()) {
+                    val noteColor = pinColor ?: MaterialTheme.colorScheme.primary
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -155,13 +156,13 @@ fun MangaChapterListItem(
                         Icon(
                             imageVector = Icons.Outlined.EditNote,
                             contentDescription = null,
-                            tint = pinColor,
+                            tint = noteColor,
                             modifier = Modifier.height(14.dp),
                         )
                         Text(
                             text = pinNote,
                             style = MaterialTheme.typography.bodySmall,
-                            color = pinColor,
+                            color = noteColor,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
