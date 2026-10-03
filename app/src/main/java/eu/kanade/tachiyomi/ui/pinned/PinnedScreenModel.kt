@@ -29,6 +29,10 @@ data class PinnedEntry(
     val otherSide: Boolean,
 )
 
+/** The entry an entry section belongs to (null manga = no longer in the database). */
+@Immutable
+data class SectionOwner(val manga: Manga?, val otherSide: Boolean)
+
 /** What the screen shows: the tile grid, or the chapters of one section / the notes-only group. */
 sealed interface PinnedView {
     data object Grid : PinnedView
@@ -53,7 +57,10 @@ class PinnedScreenModel(
             ) { sections, pins, otherSideIds -> Triple(sections, pins, otherSideIds) }
                 .collectLatest { (sections, pins, otherSideIds) ->
                     val entries = loadEntries(sections, pins, otherSideIds)
-                    mutableState.update { it.copy(loading = false, sections = sections, entries = entries) }
+                    val owners = loadSectionOwners(sections, entries, otherSideIds)
+                    mutableState.update {
+                        it.copy(loading = false, sections = sections, entries = entries, sectionOwners = owners)
+                    }
                 }
         }
     }
@@ -83,6 +90,25 @@ class PinnedScreenModel(
         }.sortedWith(compareBy({ it.manga.title.lowercase() }, { it.chapter.chapterNumber }))
     }
 
+    /** The manga each entry section belongs to, and whether it's on the OtherSide. */
+    private suspend fun loadSectionOwners(
+        sections: List<PinSection>,
+        entries: List<PinnedEntry>,
+        otherSideIds: Set<String>,
+    ): Map<String, SectionOwner> {
+        val known = entries.associate { ChapterPinStore.mangaKey(it.manga) to SectionOwner(it.manga, it.otherSide) }
+        return sections.mapNotNull { it.manga }.distinct().associateWith { key ->
+            known[key] ?: run {
+                val parts = key.split('|', limit = 2)
+                val manga = parts.getOrNull(0)?.toLongOrNull()?.let { source ->
+                    parts.getOrNull(1)?.let { url -> getMangaByUrlAndSourceId.await(url, source) }
+                }
+                val otherSide = manga != null && getCategories.await(manga.id).any { it.id.toString() in otherSideIds }
+                SectionOwner(manga, otherSide)
+            }
+        }
+    }
+
     fun toggleOtherSide() {
         mutableState.update { it.copy(otherSideMode = !it.otherSideMode, view = PinnedView.Grid, entryFilter = emptySet()) }
     }
@@ -110,6 +136,7 @@ class PinnedScreenModel(
         val otherSideMode: Boolean = false,
         val view: PinnedView = PinnedView.Grid,
         val entryFilter: Set<Long> = emptySet(),
+        val sectionOwners: Map<String, SectionOwner> = emptyMap(),
     ) {
         /** Everything on the current side (normal or OtherSide). */
         val sideEntries: List<PinnedEntry> by lazy { entries.filter { it.otherSide == otherSideMode } }
@@ -129,9 +156,27 @@ class PinnedScreenModel(
          */
         val visibleSections: List<PinSection> by lazy {
             sections.filter { section ->
-                val uses = entries.filter { e -> e.pin.sections.any { it.id == section.id } }
-                uses.isEmpty() || uses.any { it.otherSide == otherSideMode }
+                val owner = section.manga
+                if (owner != null) {
+                    // Entry sections follow their manga's side
+                    (sectionOwners[owner]?.otherSide ?: false) == otherSideMode
+                } else {
+                    val uses = entries.filter { e -> e.pin.sections.any { it.id == section.id } }
+                    uses.isEmpty() || uses.any { it.otherSide == otherSideMode }
+                }
             }
+        }
+
+        /** Title of the entry an entry section belongs to. */
+        fun ownerTitle(section: PinSection): String? = section.manga?.let { sectionOwners[it]?.manga?.title }
+
+        /** Sections to show as tiles, honoring the entry filter: shared ones, then entry ones. */
+        val tileSections: Pair<List<PinSection>, List<PinSection>> by lazy {
+            val filter = entryFilter.filter { id -> sideManga.any { it.id == id } }
+            val filterKeys = sideManga.filter { it.id in filter }.map { ChapterPinStore.mangaKey(it) }.toSet()
+            val shared = visibleSections.filter { it.isShared }
+            val own = visibleSections.filter { !it.isShared && (filter.isEmpty() || it.manga in filterKeys) }
+            shared to own
         }
 
         fun entriesIn(sectionId: Long) = shownEntries.filter { e -> e.pin.sections.any { it.id == sectionId } }

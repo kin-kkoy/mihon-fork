@@ -50,6 +50,7 @@ import eu.kanade.domain.chapter.service.ChapterPinStore
 @Composable
 fun ChapterNotesDialog(
     store: ChapterPinStore,
+    entry: EntryRef,
     subtitle: String?,
     initialSectionIds: List<Long>,
     initialNote: String,
@@ -66,12 +67,9 @@ fun ChapterNotesDialog(
     var picks by remember { mutableStateOf(initialSectionIds) }
     var accordionOpen by remember { mutableStateOf(startWithNewSection) }
     var managing by remember { mutableStateOf(false) }
-    var adding by remember { mutableStateOf(startWithNewSection) }
-    var newName by remember { mutableStateOf("") }
-    var newColor by remember { mutableStateOf(ChapterPinStore.PALETTE[sections.size % ChapterPinStore.PALETTE.size]) }
     var managingPresets by remember { mutableStateOf(false) }
 
-    val picked = sections.filter { it.id in picks }
+    val picked = (sections.filter { it.manga == entry.key } + sections.filter { it.isShared }).filter { it.id in picks }
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
@@ -208,73 +206,29 @@ fun ChapterNotesDialog(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = if (managing) "Rename, recolor or delete" else "Tap to add or remove (pick several)",
+                                    text = if (managing) {
+                                        "Rename, recolor, change scope (tap the chip) or delete"
+                                    } else {
+                                        "Tap to add or remove (pick several)"
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.weight(1f),
                                 )
                                 if (sections.isNotEmpty()) {
-                                    TextButton(onClick = { managing = !managing; adding = false }) {
+                                    TextButton(onClick = { managing = !managing }) {
                                         Text(if (managing) "Done" else "Manage")
                                     }
                                 }
                             }
-                            sections.forEach { section ->
-                                if (managing) {
-                                    ManageSectionRow(
-                                        section = section,
-                                        onRename = { store.renameSection(section.id, it) },
-                                        onRecolor = {
-                                            val palette = ChapterPinStore.PALETTE
-                                            val next = palette[(palette.indexOf(section.color) + 1) % palette.size]
-                                            store.recolorSection(section.id, next)
-                                        },
-                                        onDelete = {
-                                            store.deleteSection(section.id)
-                                            picks = picks - section.id
-                                        },
-                                    )
-                                } else {
-                                    SectionOption(
-                                        section = section,
-                                        count = null,
-                                        selected = section.id in picks,
-                                        onClick = {
-                                            picks = if (section.id in picks) picks - section.id else picks + section.id
-                                        },
-                                    )
-                                }
-                            }
-                            if (adding) {
-                                OutlinedTextField(
-                                    value = newName,
-                                    onValueChange = { newName = it },
-                                    placeholder = { Text("Section name, e.g. Re-read") },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    ChapterPinStore.PALETTE.forEach { c ->
-                                        ColorDot(color = Color(c), selected = c == newColor, onClick = { newColor = c })
-                                    }
-                                }
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                    TextButton(onClick = { adding = false; newName = "" }) { Text("Cancel") }
-                                    TextButton(
-                                        enabled = newName.isNotBlank(),
-                                        onClick = {
-                                            picks = picks + store.addSection(newName, newColor)
-                                            adding = false
-                                            newName = ""
-                                            newColor = ChapterPinStore.PALETTE[
-                                                (sections.size + 1) % ChapterPinStore.PALETTE.size,
-                                            ]
-                                        },
-                                    ) { Text("Add") }
-                                }
-                            } else if (!managing) {
-                                TextButton(onClick = { adding = true }) { Text("+ New section") }
-                            }
+                            SectionPickerList(
+                                store = store,
+                                entry = entry,
+                                picks = picks,
+                                onPicksChange = { picks = it },
+                                managing = managing,
+                                startAdding = startWithNewSection,
+                            )
                         }
                     }
                 }

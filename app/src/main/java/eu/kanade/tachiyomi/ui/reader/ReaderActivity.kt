@@ -49,7 +49,9 @@ import com.google.android.material.transition.platform.MaterialContainerTransfor
 import com.hippo.unifile.UniFile
 import eu.kanade.core.util.ifSourcesLoaded
 import eu.kanade.domain.base.BasePreferences
+import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.presentation.manga.components.ChapterNotesDialog
+import eu.kanade.presentation.manga.components.EntryRef
 import eu.kanade.presentation.reader.DisplayRefreshHost
 import eu.kanade.presentation.reader.OrientationSelectDialog
 import eu.kanade.presentation.reader.ReaderContentOverlay
@@ -294,9 +296,10 @@ class ReaderActivity : BaseActivity() {
                     },
                 )
             }
-            is ReaderViewModel.Dialog.ChapterNotes -> {
+            is ReaderViewModel.Dialog.ChapterNotes -> state.manga?.let { manga ->
                 ChapterNotesDialog(
                     store = viewModel.chapterPinStore,
+                    entry = EntryRef(ChapterPinStore.mangaKey(manga), manga.title),
                     subtitle = state.currentChapter?.chapter?.name,
                     initialSectionIds = state.pin?.sections.orEmpty().map { it.id },
                     initialNote = state.pin?.note.orEmpty(),
@@ -492,6 +495,7 @@ class ReaderActivity : BaseActivity() {
             bookmarked = state.bookmarked,
             pin = state.pin,
             pinStore = viewModel.chapterPinStore,
+            entryKey = state.manga?.let { ChapterPinStore.mangaKey(it) },
             onBookmarkTap = viewModel::toggleChapterBookmark,
             onToggleSection = viewModel::toggleCurrentChapterSection,
             onUnpinFromSections = viewModel::unpinCurrentChapterFromSections,

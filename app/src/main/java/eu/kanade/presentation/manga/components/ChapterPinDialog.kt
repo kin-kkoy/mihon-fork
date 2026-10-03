@@ -51,6 +51,7 @@ import eu.kanade.domain.chapter.service.PinSection
 @Composable
 fun ChapterPinDialog(
     store: ChapterPinStore,
+    entry: EntryRef,
     chapterCount: Int,
     initialSectionIds: List<Long>,
     initialNote: String,
@@ -60,15 +61,11 @@ fun ChapterPinDialog(
     onDismissRequest: () -> Unit,
 ) {
     val sections by store.sections.collectAsState(store.getSections())
-    val pins by store.pins.collectAsState(store.getPins())
     val presets by store.presets.collectAsState(emptyList())
 
     var picks by remember { mutableStateOf(initialSectionIds) }
     var note by remember { mutableStateOf(initialNote) }
     var managing by remember { mutableStateOf(false) }
-    var adding by remember { mutableStateOf(false) }
-    var newName by remember { mutableStateOf("") }
-    var newColor by remember { mutableStateOf(ChapterPinStore.PALETTE[sections.size % ChapterPinStore.PALETTE.size]) }
     var managingPresets by remember { mutableStateOf(false) }
 
     val validPicks = picks.filter { id -> sections.any { it.id == id } }
@@ -79,7 +76,7 @@ fun ChapterPinDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(text = "Pin to sections", modifier = Modifier.weight(1f))
                 if (sections.isNotEmpty()) {
-                    TextButton(onClick = { managing = !managing; adding = false }) {
+                    TextButton(onClick = { managing = !managing }) {
                         Text(if (managing) "Done" else "Manage")
                     }
                 }
@@ -94,73 +91,20 @@ fun ChapterPinDialog(
                     text = buildString {
                         append(if (chapterCount == 1) "1 chapter" else "$chapterCount chapters")
                         if (chapterCount > 1 && !managing) append(" · ticked sections are added to each")
-                        if (managing) append(" · rename, recolor or delete sections")
+                        if (managing) append(" · rename, recolor, change scope (tap the chip) or delete")
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
-                if (sections.isEmpty() && !adding) {
-                    Text(
-                        text = "No sections yet — create one.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                }
-
-                sections.forEach { section ->
-                    if (managing) {
-                        ManageSectionRow(
-                            section = section,
-                            onRename = { store.renameSection(section.id, it) },
-                            onRecolor = {
-                                val palette = ChapterPinStore.PALETTE
-                                val next = palette[(palette.indexOf(section.color) + 1) % palette.size]
-                                store.recolorSection(section.id, next)
-                            },
-                            onDelete = {
-                                store.deleteSection(section.id)
-                                picks = picks - section.id
-                            },
-                        )
-                    } else {
-                        SectionOption(
-                            section = section,
-                            count = pins.values.count { section.id in it.sectionIds },
-                            selected = section.id in validPicks,
-                            onClick = { picks = if (section.id in picks) picks - section.id else picks + section.id },
-                        )
-                    }
-                }
-
-                if (adding) {
-                    OutlinedTextField(
-                        value = newName,
-                        onValueChange = { newName = it },
-                        placeholder = { Text("Section name, e.g. Re-read") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ChapterPinStore.PALETTE.forEach { c ->
-                            ColorDot(color = Color(c), selected = c == newColor, onClick = { newColor = c })
-                        }
-                    }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { adding = false; newName = "" }) { Text("Cancel") }
-                        TextButton(
-                            enabled = newName.isNotBlank(),
-                            onClick = {
-                                picks = picks + store.addSection(newName, newColor)
-                                adding = false
-                                newName = ""
-                                newColor = ChapterPinStore.PALETTE[(sections.size + 1) % ChapterPinStore.PALETTE.size]
-                            },
-                        ) { Text("Add") }
-                    }
-                } else if (!managing) {
-                    TextButton(onClick = { adding = true }) { Text("+ New section") }
-                }
+                SectionPickerList(
+                    store = store,
+                    entry = entry,
+                    picks = picks,
+                    onPicksChange = { picks = it },
+                    managing = managing,
+                    showCounts = true,
+                )
 
                 if (!managing) {
                     HorizontalDivider()
@@ -288,6 +232,8 @@ internal fun SectionOption(
 @Composable
 internal fun ManageSectionRow(
     section: PinSection,
+    scopeLabel: String,
+    onScopeClick: () -> Unit,
     onRename: (String) -> Unit,
     onRecolor: () -> Unit,
     onDelete: () -> Unit,
@@ -307,6 +253,7 @@ internal fun ManageSectionRow(
             singleLine = true,
             modifier = Modifier.weight(1f),
         )
+        ScopeChip(shared = section.isShared, label = scopeLabel, onClick = onScopeClick)
         IconButton(onClick = onDelete) {
             Icon(Icons.Outlined.Close, contentDescription = "Delete section")
         }

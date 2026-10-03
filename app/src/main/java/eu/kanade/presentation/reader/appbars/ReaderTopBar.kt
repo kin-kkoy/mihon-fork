@@ -1,15 +1,19 @@
 package eu.kanade.presentation.reader.appbars
 
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -31,12 +35,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.chapter.service.ChapterPinStore
+import eu.kanade.domain.chapter.service.PinSection
 import eu.kanade.domain.chapter.service.ResolvedPin
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
@@ -52,6 +58,7 @@ fun ReaderTopBar(
     bookmarked: Boolean,
     pin: ResolvedPin?,
     pinStore: ChapterPinStore,
+    entryKey: String?,
     onBookmarkTap: () -> Unit,
     onToggleSection: (Long) -> Unit,
     onUnpinFromSections: () -> Unit,
@@ -82,6 +89,7 @@ fun ReaderTopBar(
                 bookmarked = bookmarked,
                 pin = pin,
                 pinStore = pinStore,
+                entryKey = entryKey,
                 onTap = onBookmarkTap,
                 onToggleSection = onToggleSection,
                 onUnpinFromSections = onUnpinFromSections,
@@ -140,6 +148,7 @@ private fun RowScope.BookmarkPinButton(
     bookmarked: Boolean,
     pin: ResolvedPin?,
     pinStore: ChapterPinStore,
+    entryKey: String?,
     onTap: () -> Unit,
     onToggleSection: (Long) -> Unit,
     onUnpinFromSections: () -> Unit,
@@ -184,6 +193,7 @@ private fun RowScope.BookmarkPinButton(
             BookmarkPinMenu(
                 pin = pin,
                 pinStore = pinStore,
+                entryKey = entryKey,
                 onDismiss = { menuOpen = false },
                 // Stays open so several sections can be ticked in one go
                 onToggleSection = onToggleSection,
@@ -204,6 +214,7 @@ private fun RowScope.BookmarkPinButton(
 private fun BookmarkPinMenu(
     pin: ResolvedPin?,
     pinStore: ChapterPinStore,
+    entryKey: String?,
     onDismiss: () -> Unit,
     onToggleSection: (Long) -> Unit,
     onUnpinFromSections: () -> Unit,
@@ -211,19 +222,32 @@ private fun BookmarkPinMenu(
 ) {
     val sections by pinStore.sections.collectAsState(pinStore.getSections())
     val quickPin by pinStore.quickPinToLast.changes().collectAsState(pinStore.quickPinToLast.get())
-    val lastId by pinStore.lastSection.changes().collectAsState(pinStore.lastSection.get())
-    val last = sections.find { it.id == lastId }
+    val lastIds by pinStore.lastSections.collectAsState(emptyMap())
+    val own = sections.filter { it.manga == entryKey }
+    val shared = sections.filter { it.isShared }
+    val last = lastIds[entryKey]?.let { id -> (own + shared).find { it.id == id } }
+
+    @Composable
+    fun Header(icon: ImageVector, text: String) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(icon, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 
     DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
-        Text(
-            text = "PIN TO SECTIONS",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-        )
         val pinnedIds = pin?.sections.orEmpty().map { it.id }
-        sections.forEach { section ->
+        @Composable
+        fun Item(section: PinSection) {
             DropdownMenuItem(
                 text = { Text(section.name) },
                 leadingIcon = { Icon(Icons.Filled.Bookmark, null, tint = Color(section.color)) },
@@ -231,6 +255,18 @@ private fun BookmarkPinMenu(
                 onClick = { onToggleSection(section.id) },
             )
         }
+        Header(Icons.AutoMirrored.Outlined.MenuBook, "THIS ENTRY")
+        own.forEach { Item(it) }
+        if (own.isEmpty()) {
+            Text(
+                text = "No sections for this entry yet",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
+        Header(Icons.Outlined.Public, "ALL ENTRIES")
+        shared.forEach { Item(it) }
         DropdownMenuItem(
             text = { Text("New section…") },
             leadingIcon = { Icon(Icons.Outlined.Add, null) },
@@ -249,7 +285,7 @@ private fun BookmarkPinMenu(
                 Column {
                     Text("Tap pins to last section")
                     Text(
-                        text = last?.let { "Last: ${it.name}" } ?: "Pick a section first",
+                        text = last?.let { "Last here: ${it.name}" } ?: "Pick a section first",
                         style = MaterialTheme.typography.bodySmall,
                         color = last?.let { Color(it.color) } ?: MaterialTheme.colorScheme.onSurfaceVariant,
                     )

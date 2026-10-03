@@ -12,10 +12,13 @@ import tachiyomi.domain.manga.model.Manga
 
 /**
  * A user-made group of pinned chapters ("Best moments", "Lore", ...).
- * [color] is an ARGB int picked from [PALETTE].
+ * [color] is an ARGB int picked from [PALETTE]. [manga] is the entry it belongs to
+ * (see [ChapterPinStore.mangaKey]); null means it's shared by all entries.
  */
 @Serializable
-data class PinSection(val id: Long, val name: String, val color: Int)
+data class PinSection(val id: Long, val name: String, val color: Int, val manga: String? = null) {
+    val isShared get() = manga == null
+}
 
 /**
  * A chapter's pin: any number of sections plus an optional note. At least one is set
@@ -37,8 +40,8 @@ data class ChapterPin(
 }
 
 /**
- * A pin resolved against the existing sections, ready for display. [sections] are in the user's
- * section order (deleted ones dropped); the first one is the chapter's main color.
+ * A pin resolved against the existing sections, ready for display. [sections] are ordered entry
+ * sections first, then shared ones (deleted ones dropped); the first one is the chapter's main color.
  */
 data class ResolvedPin(val sections: List<PinSection>, val note: String) {
     val primary: PinSection? get() = sections.firstOrNull()
@@ -57,15 +60,16 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
     private val pinsPref = preferenceStore.getString("chapter_pins", "{}")
     private val presetsPref = preferenceStore.getString("chapter_pin_note_presets", "[]")
 
-    /** Section last picked in the reader; -1 = none. */
-    val lastSection = preferenceStore.getLong("chapter_pin_last_section", -1L)
+    /** Section last picked in the reader, per entry (mangaKey -> section id). */
+    private val lastSectionsPref = preferenceStore.getString("chapter_pin_last_section_by_entry", "{}")
 
-    /** When on, tapping the reader's bookmark+pin button pins straight to [lastSection]. */
+    /** When on, tapping the reader's bookmark+pin button pins straight to the entry's last section. */
     val quickPinToLast = preferenceStore.getBoolean("chapter_pin_quick_pin_to_last", false)
 
     val sections: Flow<List<PinSection>> = sectionsPref.changes().map(::decodeSections)
     val pins: Flow<Map<String, ChapterPin>> = pinsPref.changes().map(::decodePins)
     val presets: Flow<List<String>> = presetsPref.changes().map(::decodePresets)
+    val lastSections: Flow<Map<String, Long>> = lastSectionsPref.changes().map(::decodeLast)
 
     fun getSections(): List<PinSection> = decodeSections(sectionsPref.get())
     fun getPins(): Map<String, ChapterPin> = decodePins(pinsPref.get())
@@ -74,6 +78,17 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
 
     fun resolve(manga: Manga, chapter: Chapter): ResolvedPin? =
         resolve(getPins()[key(manga, chapter)], getSections())
+
+    /** The entry's last-picked section, if it still exists and can be used in this entry. */
+    fun getLastSection(manga: Manga): PinSection? {
+        val id = decodeLast(lastSectionsPref.get())[mangaKey(manga)] ?: return null
+        return sectionsFor(manga, getSections()).find { it.id == id }
+    }
+
+    @Synchronized
+    fun setLastSection(manga: Manga, sectionId: Long) {
+        lastSectionsPref.set(json.encodeToString(decodeLast(lastSectionsPref.get()) + (mangaKey(manga) to sectionId)))
+    }
 
     // Pins
 
@@ -120,8 +135,9 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
     }
 
     /**
-     * Copies pins (section + note) from [fromManga]'s chapters to the matching [toManga] chapters,
-     * e.g. after a migration. [pairs] maps each old chapter to its new counterpart.
+     * Copies pins (sections + note) from [fromManga]'s chapters to the matching [toManga] chapters,
+     * e.g. after a migration. [pairs] maps each old chapter to its new counterpart. Sections that
+     * belonged to [fromManga] move over to [toManga] so they still show up there.
      */
     @Synchronized
     fun copyPins(fromManga: Manga, toManga: Manga, pairs: List<Pair<Chapter, Chapter>>) {
@@ -130,15 +146,19 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
             current[key(fromManga, old)]?.let { key(toManga, new) to it }
         }
         if (copied.isNotEmpty()) savePins(current + copied)
+        val from = mangaKey(fromManga)
+        val to = mangaKey(toManga)
+        saveSections(getSections().map { if (it.manga == from) it.copy(manga = to) else it })
     }
 
     // Sections
 
+    /** Adds a section; [manga] is the entry it belongs to (null = shared by all entries). */
     @Synchronized
-    fun addSection(name: String, color: Int): Long {
+    fun addSection(name: String, color: Int, manga: String?): Long {
         val current = getSections()
         val id = (current.maxOfOrNull { it.id } ?: 0L) + 1
-        saveSections(current + PinSection(id, name.trim(), color))
+        saveSections(current + PinSection(id, name.trim(), color, manga))
         return id
     }
 
@@ -153,6 +173,39 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
         saveSections(getSections().map { if (it.id == id) it.copy(color = color) else it })
     }
 
+    /** Makes the section shared ([manga] = null) or belong to one entry. */
+    @Synchronized
+    fun setScope(id: Long, manga: String?) {
+        saveSections(getSections().map { if (it.id == id) it.copy(manga = manga) else it })
+    }
+
+    /** Entries (mangaKeys) that have at least one chapter in the section. */
+    fun mangaUsing(sectionId: Long): Set<String> =
+        getPins().filterValues { sectionId in it.sectionIds }.keys.mapNotNull(::mangaKeyOf).toSet()
+
+    /**
+     * Turns a shared section used by several entries into one entry section per entry, each with
+     * the same name and color and keeping its chapters.
+     */
+    @Synchronized
+    fun splitSection(id: Long) {
+        val section = getSections().find { it.id == id } ?: return
+        val users = mangaUsing(id).toList()
+        if (users.isEmpty()) return
+        var sections = getSections().map { if (it.id == id) it.copy(manga = users.first()) else it }
+        val pins = getPins().toMutableMap()
+        var nextId = (sections.maxOfOrNull { it.id } ?: 0L) + 1
+        users.drop(1).forEach { user ->
+            val copyId = nextId++
+            sections = sections + section.copy(id = copyId, manga = user)
+            pins.entries.filter { (k, pin) -> mangaKeyOf(k) == user && id in pin.sectionIds }.forEach { (k, pin) ->
+                pins[k] = pin.withSections(pin.sectionIds.map { if (it == id) copyId else it })
+            }
+        }
+        saveSections(sections)
+        savePins(pins)
+    }
+
     /** Deletes the section and unpins its chapters (their bookmarks and notes are kept). */
     @Synchronized
     fun deleteSection(id: Long) {
@@ -162,7 +215,7 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
                 .mapValues { (_, pin) -> if (id in pin.sectionIds) pin.withSections(pin.sectionIds - id) else pin }
                 .filterValues { !it.isEmpty },
         )
-        if (lastSection.get() == id) lastSection.set(-1L)
+        lastSectionsPref.set(json.encodeToString(decodeLast(lastSectionsPref.get()).filterValues { it != id }))
     }
 
     // Note presets
@@ -192,16 +245,36 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
     private fun decodePresets(raw: String): List<String> =
         runCatching { json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())
 
+    private fun decodeLast(raw: String): Map<String, Long> =
+        runCatching { json.decodeFromString<Map<String, Long>>(raw) }.getOrDefault(emptyMap())
+
     companion object {
         fun resolve(pin: ChapterPin?, sections: List<PinSection>): ResolvedPin? {
             if (pin == null) return null
             val ids = pin.sectionIds
-            val resolved = sections.filter { it.id in ids }
+            val resolved = entryFirst(sections).filter { it.id in ids }
             if (resolved.isEmpty() && pin.note.isBlank()) return null
             return ResolvedPin(resolved, pin.note)
         }
 
-        fun key(manga: Manga, chapter: Chapter) = "${manga.source}|${manga.url}|${chapter.url}"
+        /** Sections usable in [manga]: its own entry sections first, then the shared ones. */
+        fun sectionsFor(manga: Manga, sections: List<PinSection>): List<PinSection> {
+            val key = mangaKey(manga)
+            return sections.filter { it.manga == key } + sections.filter { it.isShared }
+        }
+
+        private fun entryFirst(sections: List<PinSection>) = sections.filterNot { it.isShared } + sections.filter { it.isShared }
+
+        /** Identifies an entry across restores: source + manga URL. */
+        fun mangaKey(manga: Manga) = "${manga.source}|${manga.url}"
+
+        fun key(manga: Manga, chapter: Chapter) = "${mangaKey(manga)}|${chapter.url}"
+
+        /** The mangaKey part of a pin key ("source|mangaUrl|chapterUrl"). */
+        fun mangaKeyOf(pinKey: String): String? {
+            val parts = pinKey.split('|', limit = 3)
+            return if (parts.size == 3) "${parts[0]}|${parts[1]}" else null
+        }
 
         /** Gold, coral, teal, sky, pink, lime — same as the approved prototype. */
         val PALETTE = listOf(

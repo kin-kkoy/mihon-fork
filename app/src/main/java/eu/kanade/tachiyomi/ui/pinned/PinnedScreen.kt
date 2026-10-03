@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -29,9 +30,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,8 +62,10 @@ import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.domain.chapter.service.PinSection
 import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.manga.components.EntryRef
 import eu.kanade.presentation.manga.components.ManageSectionsDialog
 import eu.kanade.presentation.manga.components.MangaCover
 import eu.kanade.presentation.manga.components.pinnedGlow
@@ -186,10 +191,14 @@ class PinnedScreen : Screen() {
             ManageSectionsDialog(
                 store = screenModel.store,
                 sections = state.visibleSections,
-                subtitle = if (state.otherSideMode) {
-                    "OtherSide: only sections used here are listed"
-                } else {
-                    "Rename, recolor (tap the dot) or delete"
+                entries = state.sideManga.map { EntryRef(ChapterPinStore.mangaKey(it), it.title) },
+                ownerTitle = state::ownerTitle,
+                contextEntry = state.sideManga
+                    .singleOrNull { it.id in state.entryFilter }
+                    ?.let { ChapterPinStore.mangaKey(it) },
+                subtitle = buildString {
+                    append("Rename, recolor (tap the dot), change scope (tap the chip) or delete.")
+                    if (state.otherSideMode) append(" OtherSide: only sections used here are listed.")
                 },
                 startAdding = startAdding,
                 onDismissRequest = { manageSections = null },
@@ -207,9 +216,13 @@ private fun PinnedGrid(
     onNewSection: () -> Unit,
 ) {
     val filtering = state.entryFilter.any { id -> state.sideManga.any { it.id == id } }
-    val tiles = state.visibleSections
+    val (sharedSections, entrySections) = state.tileSections
+    fun tilesOf(list: List<PinSection>) = list
         .map { it to state.entriesIn(it.id) }
         .filter { (_, entries) -> !filtering || entries.isNotEmpty() }
+    val sharedTiles = tilesOf(sharedSections)
+    val entryTiles = tilesOf(entrySections)
+    val tiles = sharedTiles + entryTiles
 
     if (state.sideEntries.isEmpty() && tiles.isEmpty()) {
         EmptyScreen(
@@ -237,14 +250,24 @@ private fun PinnedGrid(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(tiles, key = { "section-${it.first.id}" }) { (section, entries) ->
-                SectionTile(
-                    name = section.name,
-                    color = Color(section.color),
-                    count = entries.size,
-                    manga = entries.map { it.manga }.distinctBy { it.id },
-                    onClick = { onOpen(PinnedView.Section(section.id)) },
-                )
+            listOf(
+                Triple("shared", "Shared by all entries", sharedTiles),
+                Triple("entry", "Entry sections", entryTiles),
+            ).forEach { (group, label, groupTiles) ->
+                if (groupTiles.isEmpty()) return@forEach
+                item(key = "header-$group", span = { GridItemSpan(maxLineSpan) }) {
+                    SectionGroupHeader(shared = group == "shared", text = label)
+                }
+                items(groupTiles, key = { "section-${it.first.id}" }) { (section, entries) ->
+                    SectionTile(
+                        name = section.name,
+                        color = Color(section.color),
+                        count = entries.size,
+                        manga = entries.map { it.manga }.distinctBy { it.id },
+                        scope = if (section.isShared) "All entries" else state.ownerTitle(section) ?: "One entry",
+                        onClick = { onOpen(PinnedView.Section(section.id)) },
+                    )
+                }
             }
             if (state.notesOnly.isNotEmpty()) {
                 item(key = "notes-only") {
@@ -253,6 +276,7 @@ private fun PinnedGrid(
                         color = MaterialTheme.colorScheme.outline,
                         count = state.notesOnly.size,
                         manga = state.notesOnly.map { it.manga }.distinctBy { it.id },
+                        scope = null,
                         onClick = { onOpen(PinnedView.NotesOnly) },
                     )
                 }
@@ -283,6 +307,28 @@ private fun PinnedGrid(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SectionGroupHeader(shared: Boolean, text: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.padding(top = 6.dp),
+    ) {
+        Icon(
+            imageVector = if (shared) Icons.Outlined.Public else Icons.AutoMirrored.Outlined.MenuBook,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = text.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -319,6 +365,7 @@ private fun SectionTile(
     color: Color,
     count: Int,
     manga: List<Manga>,
+    scope: String?,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -344,6 +391,15 @@ private fun SectionTile(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (scope != null) {
+                    Text(
+                        text = scope,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 // Stacked covers of the manga in this section
                 Box(Modifier.padding(top = 10.dp).height(46.dp)) {
                     manga.take(4).forEachIndexed { i, m ->

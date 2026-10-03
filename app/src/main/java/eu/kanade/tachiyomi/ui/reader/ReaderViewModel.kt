@@ -652,9 +652,9 @@ class ReaderViewModel @JvmOverloads constructor(
             mutableState.update { it.copy(pin = null) }
             return
         }
-        val last = chapterPinStore.lastSection.get()
-        if (chapterPinStore.quickPinToLast.get() && chapterPinStore.getSections().any { it.id == last }) {
-            addCurrentChapterToSection(last)
+        val last = manga?.let { chapterPinStore.getLastSection(it) }
+        if (chapterPinStore.quickPinToLast.get() && last != null) {
+            addCurrentChapterToSection(last.id)
         } else {
             setBookmark(readerChapter, true)
         }
@@ -683,7 +683,7 @@ class ReaderViewModel @JvmOverloads constructor(
         val manga = manga ?: return
         val chapter = readerChapter.chapter.toDomainChapter() ?: return
         chapterPinStore.addToSection(manga, listOf(chapter), sectionId)
-        chapterPinStore.lastSection.set(sectionId)
+        chapterPinStore.setLastSection(manga, sectionId)
         setBookmark(readerChapter, true)
         mutableState.update { it.copy(pin = pinFor(readerChapter)) }
     }
@@ -721,7 +721,7 @@ class ReaderViewModel @JvmOverloads constructor(
         val manga = manga ?: return
         val chapter = readerChapter.chapter.toDomainChapter() ?: return
         chapterPinStore.pin(manga, listOf(chapter), sectionIds, note)
-        sectionIds.lastOrNull()?.let { chapterPinStore.lastSection.set(it) }
+        sectionIds.lastOrNull()?.let { chapterPinStore.setLastSection(manga, it) }
         if (sectionIds.isNotEmpty() || note.isNotBlank()) setBookmark(readerChapter, true)
         mutableState.update { it.copy(pin = pinFor(readerChapter), dialog = null) }
     }

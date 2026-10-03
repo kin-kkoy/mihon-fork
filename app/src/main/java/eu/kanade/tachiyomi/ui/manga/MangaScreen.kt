@@ -24,6 +24,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifSourcesLoaded
+import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.domain.manga.model.hasCustomCover
 import eu.kanade.domain.manga.model.toSManga
 import eu.kanade.domain.source.service.SourcePreferences
@@ -35,6 +36,7 @@ import eu.kanade.presentation.manga.EditCoverAction
 import eu.kanade.presentation.manga.MangaScreen
 import eu.kanade.presentation.manga.components.ChapterPinDialog
 import eu.kanade.presentation.manga.components.DeleteChaptersDialog
+import eu.kanade.presentation.manga.components.EntryRef
 import eu.kanade.presentation.manga.components.MangaCoverDialog
 import eu.kanade.presentation.manga.components.ScanlatorFilterDialog
 import eu.kanade.presentation.manga.components.SetIntervalDialog
@@ -202,6 +204,7 @@ class MangaScreen(
                 val existing = dialog.chapters.singleOrNull()?.let { successState.pinByChapterId[it.id] }
                 ChapterPinDialog(
                     store = screenModel.chapterPinStore,
+                    entry = EntryRef(ChapterPinStore.mangaKey(successState.manga), successState.manga.title),
                     chapterCount = dialog.chapters.size,
                     initialSectionIds = existing?.sections.orEmpty().map { it.id },
                     initialNote = existing?.note.orEmpty(),
