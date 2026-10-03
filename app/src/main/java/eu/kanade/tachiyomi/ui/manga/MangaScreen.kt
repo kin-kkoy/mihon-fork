@@ -30,6 +30,7 @@ import eu.kanade.domain.manga.model.toSManga
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
+import eu.kanade.presentation.manga.ChapterArrangeActions
 import eu.kanade.presentation.manga.ChapterSettingsDialog
 import eu.kanade.presentation.manga.DuplicateMangaDialog
 import eu.kanade.presentation.manga.EditCoverAction
@@ -173,6 +174,15 @@ class MangaScreen(
             onPinClicked = screenModel::showPinDialog,
             onPinFilterChange = screenModel::setPinFilter,
             onTogglePinSection = screenModel::togglePinSectionExpanded,
+            arrangeActions = remember(screenModel) {
+                ChapterArrangeActions(
+                    onToggleRearrange = screenModel::toggleRearranging,
+                    onMove = screenModel::moveChapter,
+                    onResetOrder = screenModel::resetChapterOrder,
+                    onToggleShowHidden = screenModel::toggleShowHidden,
+                    onSetHidden = screenModel::setChaptersHidden,
+                )
+            },
         )
 
         var showScanlatorsDialog by remember { mutableStateOf(false) }

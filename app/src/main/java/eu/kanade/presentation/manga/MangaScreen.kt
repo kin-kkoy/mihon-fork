@@ -2,9 +2,11 @@ package eu.kanade.presentation.manga
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
@@ -14,7 +16,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -23,12 +27,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallExtendedFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.animateFloatingActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
@@ -69,6 +80,9 @@ import eu.kanade.tachiyomi.ui.manga.ChapterList
 import eu.kanade.tachiyomi.ui.manga.MangaScreenModel
 import eu.kanade.tachiyomi.ui.manga.PinFilter
 import eu.kanade.tachiyomi.util.system.copyToClipboard
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.ReorderableLazyListState
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.service.missingChaptersCount
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -136,6 +150,9 @@ fun MangaScreen(
     onPinClicked: (List<Chapter>) -> Unit,
     onPinFilterChange: (PinFilter) -> Unit,
     onTogglePinSection: (Long) -> Unit,
+
+    // Chapter arrangement
+    arrangeActions: ChapterArrangeActions,
 ) {
     val context = LocalContext.current
     val onCopyTagToClipboard: (tag: String) -> Unit = {
@@ -181,6 +198,7 @@ fun MangaScreen(
             onPinClicked = onPinClicked,
             onPinFilterChange = onPinFilterChange,
             onTogglePinSection = onTogglePinSection,
+            arrangeActions = arrangeActions,
         )
     } else {
         MangaScreenLargeImpl(
@@ -219,6 +237,7 @@ fun MangaScreen(
             onPinClicked = onPinClicked,
             onPinFilterChange = onPinFilterChange,
             onTogglePinSection = onTogglePinSection,
+            arrangeActions = arrangeActions,
         )
     }
 }
@@ -275,6 +294,9 @@ private fun MangaScreenSmallImpl(
     onPinClicked: (List<Chapter>) -> Unit,
     onPinFilterChange: (PinFilter) -> Unit,
     onTogglePinSection: (Long) -> Unit,
+
+    // Chapter arrangement
+    arrangeActions: ChapterArrangeActions,
 ) {
     val chapterListState = rememberLazyListState()
 
@@ -320,6 +342,8 @@ private fun MangaScreenSmallImpl(
                 onClickRefresh = onRefresh,
                 onClickMigrate = onMigrateClicked,
                 onClickEditNotes = onEditNotesClicked,
+                rearranging = state.rearranging,
+                onClickRearrange = arrangeActions.onToggleRearrange,
                 actionModeCounter = selectedChapterCount,
                 onCancelActionMode = { onAllChapterSelected(false) },
                 onSelectAll = { onAllChapterSelected(true) },
@@ -340,6 +364,8 @@ private fun MangaScreenSmallImpl(
                 onDownloadChapter = onDownloadChapter,
                 onMultiDeleteClicked = onMultiDeleteClicked,
                 onPinClicked = onPinClicked,
+                hiddenUrls = state.hiddenUrls,
+                onSetHidden = arrangeActions.onSetHidden,
                 fillFraction = 1f,
             )
         },
@@ -381,6 +407,12 @@ private fun MangaScreenSmallImpl(
                 topContentPadding = topPadding,
                 endContentPadding = contentPadding.calculateEndPadding(layoutDirection),
             ) {
+                val reorderState = rememberReorderableLazyListState(chapterListState) { from, to ->
+                    val fromId = (from.key as? String)?.removePrefix("chapter-")?.toLongOrNull()
+                    val toId = (to.key as? String)?.removePrefix("chapter-")?.toLongOrNull()
+                    if (fromId != null && toId != null) arrangeActions.onMove(fromId, toId)
+                }
+
                 LazyColumn(
                     modifier = Modifier.fillMaxHeight(),
                     state = chapterListState,
@@ -451,6 +483,17 @@ private fun MangaScreenSmallImpl(
                         )
                     }
 
+                    item(key = "chapter-arrange-info", contentType = "chapter-arrange-info") {
+                        ChapterArrangeInfo(
+                            hiddenCount = state.hiddenCount,
+                            showHidden = state.showHidden,
+                            customOrder = state.customOrder != null,
+                            rearranging = state.rearranging,
+                            onToggleShowHidden = arrangeActions.onToggleShowHidden,
+                            onResetOrder = arrangeActions.onResetOrder,
+                        )
+                    }
+
                     chapterPinItems(
                         state = state,
                         isAnyChapterSelected = chapters.fastAny { it.selected },
@@ -468,6 +511,12 @@ private fun MangaScreenSmallImpl(
                         manga = state.manga,
                         chapters = listItem,
                         pins = state.pinByChapterId,
+
+                        hiddenUrls = state.hiddenUrls,
+
+                        reorderState = reorderState,
+
+                        rearranging = state.rearranging,
                         isAnyChapterSelected = chapters.fastAny { it.selected },
                         chapterSwipeStartAction = chapterSwipeStartAction,
                         chapterSwipeEndAction = chapterSwipeEndAction,
@@ -534,6 +583,9 @@ fun MangaScreenLargeImpl(
     onPinClicked: (List<Chapter>) -> Unit,
     onPinFilterChange: (PinFilter) -> Unit,
     onTogglePinSection: (Long) -> Unit,
+
+    // Chapter arrangement
+    arrangeActions: ChapterArrangeActions,
 ) {
     val layoutDirection = LocalLayoutDirection.current
     val density = LocalDensity.current
@@ -572,6 +624,8 @@ fun MangaScreenLargeImpl(
                 onClickRefresh = onRefresh,
                 onClickMigrate = onMigrateClicked,
                 onClickEditNotes = onEditNotesClicked,
+                rearranging = state.rearranging,
+                onClickRearrange = arrangeActions.onToggleRearrange,
                 onCancelActionMode = { onAllChapterSelected(false) },
                 actionModeCounter = selectedChapterCount,
                 onSelectAll = { onAllChapterSelected(true) },
@@ -596,6 +650,8 @@ fun MangaScreenLargeImpl(
                     onDownloadChapter = onDownloadChapter,
                     onMultiDeleteClicked = onMultiDeleteClicked,
                     onPinClicked = onPinClicked,
+                    hiddenUrls = state.hiddenUrls,
+                    onSetHidden = arrangeActions.onSetHidden,
                     fillFraction = 0.5f,
                 )
             }
@@ -682,6 +738,12 @@ fun MangaScreenLargeImpl(
                         listState = chapterListState,
                         topContentPadding = contentPadding.calculateTopPadding(),
                     ) {
+                        val reorderState = rememberReorderableLazyListState(chapterListState) { from, to ->
+                            val fromId = (from.key as? String)?.removePrefix("chapter-")?.toLongOrNull()
+                            val toId = (to.key as? String)?.removePrefix("chapter-")?.toLongOrNull()
+                            if (fromId != null && toId != null) arrangeActions.onMove(fromId, toId)
+                        }
+
                         LazyColumn(
                             modifier = Modifier.fillMaxHeight(),
                             state = chapterListState,
@@ -705,6 +767,17 @@ fun MangaScreenLargeImpl(
                                 )
                             }
 
+                            item(key = "chapter-arrange-info", contentType = "chapter-arrange-info") {
+                                ChapterArrangeInfo(
+                                    hiddenCount = state.hiddenCount,
+                                    showHidden = state.showHidden,
+                                    customOrder = state.customOrder != null,
+                                    rearranging = state.rearranging,
+                                    onToggleShowHidden = arrangeActions.onToggleShowHidden,
+                                    onResetOrder = arrangeActions.onResetOrder,
+                                )
+                            }
+
                             chapterPinItems(
                                 state = state,
                                 isAnyChapterSelected = chapters.fastAny { it.selected },
@@ -722,6 +795,12 @@ fun MangaScreenLargeImpl(
                                 manga = state.manga,
                                 chapters = listItem,
                                 pins = state.pinByChapterId,
+
+                                hiddenUrls = state.hiddenUrls,
+
+                                reorderState = reorderState,
+
+                                rearranging = state.rearranging,
                                 isAnyChapterSelected = chapters.fastAny { it.selected },
                                 chapterSwipeStartAction = chapterSwipeStartAction,
                                 chapterSwipeEndAction = chapterSwipeEndAction,
@@ -747,6 +826,8 @@ private fun SharedMangaBottomActionMenu(
     onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction) -> Unit)?,
     onMultiDeleteClicked: (List<Chapter>) -> Unit,
     onPinClicked: (List<Chapter>) -> Unit,
+    hiddenUrls: Set<String>,
+    onSetHidden: (List<Chapter>, Boolean) -> Unit,
     fillFraction: Float,
     modifier: Modifier = Modifier,
 ) {
@@ -779,6 +860,12 @@ private fun SharedMangaBottomActionMenu(
             selected.fastAny { it.downloadState == Download.State.DOWNLOADED }
         },
         onPinClicked = { onPinClicked(selected.fastMap { it.chapter }) },
+        onHideClicked = {
+            onSetHidden(selected.fastMap { it.chapter }, true)
+        }.takeIf { selected.fastAny { it.chapter.url !in hiddenUrls } },
+        onUnhideClicked = {
+            onSetHidden(selected.fastMap { it.chapter }, false)
+        }.takeIf { selected.fastAny { it.chapter.url in hiddenUrls } },
     )
 }
 
@@ -794,6 +881,10 @@ private fun LazyListScope.sharedChapterItems(
     onChapterSelected: (ChapterList.Item, Boolean, Boolean) -> Unit,
     onChapterSwipe: (ChapterList.Item, LibraryPreferences.ChapterSwipeAction) -> Unit,
     keyPrefix: String = "",
+    hiddenUrls: Set<String> = emptySet(),
+    // Non-null while rearranging the main list: rows get a ≡ drag handle
+    reorderState: ReorderableLazyListState? = null,
+    rearranging: Boolean = false,
 ) {
     items(
         items = chapters,
@@ -812,7 +903,8 @@ private fun LazyListScope.sharedChapterItems(
                 MissingChapterCountListItem(count = item.count)
             }
             is ChapterList.Item -> {
-                MangaChapterListItem(
+                @Composable
+                fun ChapterRow(dragHandle: (@Composable () -> Unit)?) = MangaChapterListItem(
                     title = if (manga.displayMode == Manga.CHAPTER_DISPLAY_NUMBER) {
                         stringResource(
                             MR.strings.display_mode_chapter,
@@ -862,7 +954,27 @@ private fun LazyListScope.sharedChapterItems(
                     pinColor = pins[item.id]?.primary?.let { Color(it.color) },
                     pinExtraColors = pins[item.id]?.sections.orEmpty().drop(1).map { Color(it.color) },
                     pinNote = pins[item.id]?.note,
+                    hidden = item.chapter.url in hiddenUrls,
+                    dragHandle = dragHandle,
                 )
+                if (rearranging && reorderState != null) {
+                    ReorderableItem(reorderState, key = "${keyPrefix}chapter-${item.id}") {
+                        ChapterRow(
+                            dragHandle = {
+                                Icon(
+                                    imageVector = Icons.Outlined.DragHandle,
+                                    contentDescription = "Drag to move",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .draggableHandle()
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                )
+                            },
+                        )
+                    }
+                } else {
+                    ChapterRow(dragHandle = null)
+                }
             }
         }
     }
@@ -885,7 +997,7 @@ private fun LazyListScope.chapterPinItems(
     onTogglePinSection: (Long) -> Unit,
 ) {
     val sections = state.usedPinSections
-    if (sections.isEmpty()) return
+    if (sections.isEmpty() || state.rearranging) return
 
     item(key = "pin-chips", contentType = "pin-chips") {
         PinFilterChipRow(
@@ -924,6 +1036,7 @@ private fun LazyListScope.chapterPinItems(
                 onChapterSelected = onChapterSelected,
                 onChapterSwipe = onChapterSwipe,
                 keyPrefix = "pin-${section.id}-",
+                hiddenUrls = state.hiddenUrls,
             )
         }
     }
@@ -944,3 +1057,62 @@ private fun onChapterItemClick(
         else -> onChapterClicked(chapterItem.chapter)
     }
 }
+
+/** Callbacks for rearranging and hiding chapters, bundled so they pass through the layouts as one. */
+class ChapterArrangeActions(
+    val onToggleRearrange: () -> Unit,
+    val onMove: (fromId: Long, toId: Long) -> Unit,
+    val onResetOrder: () -> Unit,
+    val onToggleShowHidden: () -> Unit,
+    val onSetHidden: (List<Chapter>, hidden: Boolean) -> Unit,
+)
+
+/** Under the chapter header: rearranging hint, "Custom order ✕" tag and the hidden-chapters line. */
+@Composable
+private fun ChapterArrangeInfo(
+    hiddenCount: Int,
+    showHidden: Boolean,
+    customOrder: Boolean,
+    rearranging: Boolean,
+    onToggleShowHidden: () -> Unit,
+    onResetOrder: () -> Unit,
+) {
+    if (!rearranging && !customOrder && hiddenCount == 0) return
+    Column(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (rearranging) {
+            Text(
+                text = "Drag ≡ to move a chapter. The reader follows this order. Tap ✓ when done.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (customOrder) {
+            AssistChip(
+                onClick = onResetOrder,
+                label = { Text("Custom order") },
+                trailingIcon = { Icon(Icons.Outlined.Close, contentDescription = "Back to source order", Modifier.size(16.dp)) },
+            )
+        }
+        if (hiddenCount > 0) {
+            TextButton(onClick = onToggleShowHidden, contentPadding = PaddingValues(0.dp)) {
+                Icon(
+                    imageVector = if (showHidden) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "$hiddenCount hidden chapter${if (hiddenCount > 1) "s" else ""} · " +
+                        if (showHidden) "Hide again" else "Show",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+

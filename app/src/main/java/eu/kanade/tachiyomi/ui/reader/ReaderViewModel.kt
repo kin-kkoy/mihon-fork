@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.chapter.model.toDbChapter
+import eu.kanade.domain.chapter.service.ChapterArrangeStore
 import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.domain.chapter.service.ResolvedPin
 import eu.kanade.domain.manga.interactor.SetMangaViewerFlags
@@ -100,6 +101,7 @@ class ReaderViewModel @JvmOverloads constructor(
     private val getIncognitoState: GetIncognitoState = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     val chapterPinStore: ChapterPinStore = Injekt.get(),
+    private val chapterArrangeStore: ChapterArrangeStore = Injekt.get(),
 ) : ViewModel() {
 
     private val mutableState = MutableStateFlow(State())
@@ -204,8 +206,15 @@ class ReaderViewModel @JvmOverloads constructor(
             else -> chapters
         }
 
+        // The user's own chapter order for this entry, with hidden chapters skipped
+        // (the chapter being opened always stays, even if hidden).
+        val customOrder = chapterArrangeStore.getOrder(manga)
+        val hiddenUrls = chapterArrangeStore.getHidden(manga)
+
         chaptersForReader
             .sortedWith(getChapterSort(manga, sortDescending = false))
+            .let { ChapterArrangeStore.applyOrder(it, customOrder) { chapter -> chapter.url } }
+            .filter { it.url !in hiddenUrls || it.id == chapterId }
             .run {
                 if (readerPreferences.skipDupe.get()) {
                     removeDuplicates(selectedChapter)

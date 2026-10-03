@@ -16,6 +16,7 @@ import eu.kanade.core.util.addOrRemove
 import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.chapter.interactor.GetAvailableScanlators
 import eu.kanade.domain.chapter.interactor.SetReadStatus
+import eu.kanade.domain.chapter.service.ChapterArrangeStore
 import eu.kanade.domain.chapter.service.ChapterPin
 import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.domain.chapter.service.PinSection
@@ -106,6 +107,7 @@ class MangaScreenModel(
     private val filterChaptersForDownload: FilterChaptersForDownload = Injekt.get(),
     private val updateMangaFromRemote: UpdateMangaFromRemote = Injekt.get(),
     val chapterPinStore: ChapterPinStore = Injekt.get(),
+    private val chapterArrangeStore: ChapterArrangeStore = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<MangaScreenModel.State>(State.Loading) {
 
@@ -202,6 +204,18 @@ class MangaScreenModel(
         }
 
         screenModelScope.launchIO {
+            combine(chapterArrangeStore.orders, chapterArrangeStore.hidden) { orders, hidden -> orders to hidden }
+                .flowWithLifecycle(lifecycle)
+                .distinctUntilChanged()
+                .collectLatest { (orders, hidden) ->
+                    updateSuccessState {
+                        val key = ChapterPinStore.mangaKey(it.manga)
+                        it.copy(customOrder = orders[key], hiddenUrls = hidden[key].orEmpty().toSet())
+                    }
+                }
+        }
+
+        screenModelScope.launchIO {
             val manga = getMangaAndChapters.awaitManga(mangaId)
             val chapters = getMangaAndChapters.awaitChapters(mangaId, applyScanlatorFilter = true)
                 .toChapterListItems(manga)
@@ -227,6 +241,8 @@ class MangaScreenModel(
                     hideMissingChapters = libraryPreferences.hideMissingChapters.get(),
                     pinSections = chapterPinStore.getSections(),
                     pinData = chapterPinStore.getPins(),
+                    customOrder = chapterArrangeStore.getOrder(manga),
+                    hiddenUrls = chapterArrangeStore.getHidden(manga),
                 )
             }
 
@@ -604,6 +620,10 @@ class MangaScreenModel(
      */
     fun getNextUnreadChapter(): Chapter? {
         val successState = successState ?: return null
+        if (successState.customOrder != null || successState.hiddenUrls.isNotEmpty()) {
+            // Follow the user's own order and skip hidden chapters
+            return successState.readingOrder.firstOrNull { !it.chapter.read }?.chapter
+        }
         return successState.chapters.getNextUnread(successState.manga)
     }
 
@@ -1018,6 +1038,57 @@ class MangaScreenModel(
         }
     }
 
+    // Chapter arrangement (custom order + hidden chapters)
+
+    fun toggleRearranging() {
+        updateSuccessState {
+            it.copy(rearranging = !it.rearranging, pinFilter = PinFilter.All)
+        }
+        toggleAllSelection(false)
+    }
+
+    fun toggleShowHidden() {
+        updateSuccessState { it.copy(showHidden = !it.showHidden) }
+    }
+
+    /**
+     * Moves a chapter in the displayed list onto [toId]'s spot. Chapters not currently shown
+     * (filtered or hidden) keep their places. The result is saved as the entry's reading order.
+     */
+    fun moveChapter(fromId: Long, toId: Long) {
+        val state = successState ?: return
+        val shown = state.processedChapters.map { it.chapter }
+        val from = shown.indexOfFirst { it.id == fromId }
+        val to = shown.indexOfFirst { it.id == toId }
+        if (from < 0 || to < 0 || from == to) return
+        val newShown = shown.toMutableList().apply { add(to, removeAt(from)) }
+
+        // Put the moved list back into the slots the shown chapters occupy in the full list
+        val full = state.arrangedChapters.map { it.chapter }.toMutableList()
+        val shownIds = newShown.map { it.id }.toSet()
+        val slots = full.indices.filter { full[it].id in shownIds }
+        slots.forEachIndexed { i, slot -> full[slot] = newShown[i] }
+
+        val reading = if (state.manga.sortDescending()) full.asReversed() else full
+        val urls = reading.map { it.url }
+        val natural = state.naturalReadingOrder.map { it.chapter.url }
+        val order = urls.takeIf { it != natural }
+        updateSuccessState { it.copy(customOrder = order) }
+        chapterArrangeStore.setOrder(state.manga, order)
+    }
+
+    fun resetChapterOrder() {
+        val manga = manga ?: return
+        updateSuccessState { it.copy(customOrder = null) }
+        chapterArrangeStore.setOrder(manga, null)
+    }
+
+    fun setChaptersHidden(chapters: List<Chapter>, hidden: Boolean) {
+        val manga = manga ?: return
+        chapterArrangeStore.setHidden(manga, chapters.map { it.url }, hidden)
+        toggleAllSelection(false)
+    }
+
     // Chapters list - end
 
     sealed interface Dialog {
@@ -1081,7 +1152,34 @@ class MangaScreenModel(
             val pinData: Map<String, ChapterPin> = emptyMap(),
             val pinFilter: PinFilter = PinFilter.All,
             val expandedPinSections: Set<Long> = emptySet(),
+            val customOrder: List<String>? = null,
+            val hiddenUrls: Set<String> = emptySet(),
+            val showHidden: Boolean = false,
+            val rearranging: Boolean = false,
         ) : State {
+            /** All chapters in the source's reading order (first to read first), no filters. */
+            val naturalReadingOrder: List<ChapterList.Item> by lazy {
+                val sort = getChapterSort(manga, sortDescending = false)
+                chapters.sortedWith { (a), (b) -> sort(a, b) }
+            }
+
+            /** All chapters in the reading order, with the user's custom order applied. */
+            private val arrangedReadingOrder: List<ChapterList.Item> by lazy {
+                ChapterArrangeStore.applyOrder(naturalReadingOrder, customOrder) { it.chapter.url }
+            }
+
+            /** All chapters (no filters, hidden ones included) in display order. */
+            val arrangedChapters: List<ChapterList.Item> by lazy {
+                if (manga.sortDescending()) arrangedReadingOrder.asReversed() else arrangedReadingOrder
+            }
+
+            /** What the reader walks through: custom order, hidden chapters skipped. */
+            val readingOrder: List<ChapterList.Item> by lazy {
+                arrangedReadingOrder.filterNot { it.chapter.url in hiddenUrls }
+            }
+
+            val hiddenCount: Int by lazy { chapters.count { it.chapter.url in hiddenUrls } }
+
             /** Pins of this manga's chapters, by chapter id (deleted sections dropped). */
             val pinByChapterId: Map<Long, ResolvedPin> by lazy {
                 if (pinData.isEmpty()) return@lazy emptyMap()
@@ -1101,7 +1199,14 @@ class MangaScreenModel(
             }
 
             val processedChapters by lazy {
-                chapters.applyFilters(manga).toList()
+                val filtered = chapters.applyFilters(manga).toList()
+                val ordered = if (customOrder == null) {
+                    filtered
+                } else {
+                    val ids = filtered.map { it.id }.toSet()
+                    arrangedChapters.filter { it.id in ids }
+                }
+                if (showHidden) ordered else ordered.filterNot { it.chapter.url in hiddenUrls }
             }
 
             val isAnySelected by lazy {
@@ -1109,7 +1214,8 @@ class MangaScreenModel(
             }
 
             val chapterListItems by lazy {
-                if (hideMissingChapters) {
+                // Missing-chapter gaps make no sense in a hand-made order
+                if (hideMissingChapters || customOrder != null) {
                     return@lazy processedChapters
                 }
 

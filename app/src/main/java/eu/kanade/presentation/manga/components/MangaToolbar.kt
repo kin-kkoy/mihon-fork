@@ -1,10 +1,12 @@
 package eu.kanade.presentation.manga.components
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FlipToBack
 import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.surfaceColorAtElevation
@@ -37,6 +39,8 @@ fun MangaToolbar(
     onClickRefresh: () -> Unit,
     onClickMigrate: (() -> Unit)?,
     onClickEditNotes: () -> Unit,
+    rearranging: Boolean,
+    onClickRearrange: () -> Unit,
 
     // For action mode
     actionModeCounter: Int,
@@ -102,6 +106,14 @@ fun MangaToolbar(
                             ),
                         )
                     }
+                    add(
+                        AppBar.Action(
+                            title = if (rearranging) "Done rearranging" else "Rearrange chapters",
+                            icon = if (rearranging) Icons.Outlined.Check else Icons.Outlined.SwapVert,
+                            iconTint = if (rearranging) MaterialTheme.colorScheme.primary else null,
+                            onClick = onClickRearrange,
+                        ),
+                    )
                     add(
                         AppBar.Action(
                             title = stringResource(MR.strings.action_filter),

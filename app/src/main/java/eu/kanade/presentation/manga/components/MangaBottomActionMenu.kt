@@ -33,6 +33,8 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.RemoveDone
 import androidx.compose.material.icons.outlined.SwapCalls
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -79,6 +81,8 @@ fun MangaBottomActionMenu(
     onDownloadClicked: (() -> Unit)? = null,
     onDeleteClicked: (() -> Unit)? = null,
     onPinClicked: (() -> Unit)? = null,
+    onHideClicked: (() -> Unit)? = null,
+    onUnhideClicked: (() -> Unit)? = null,
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -92,7 +96,7 @@ fun MangaBottomActionMenu(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
         ) {
             val haptic = LocalHapticFeedback.current
-            val confirm = remember { mutableStateListOf(false, false, false, false, false, false, false, false) }
+            val confirm = remember { mutableStateListOf(false, false, false, false, false, false, false, false, false, false) }
             var resetJob by remember { mutableStateOf<Job?>(null) }
             val onLongClickItem: (Int) -> Unit = { toConfirmIndex ->
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -137,6 +141,24 @@ fun MangaBottomActionMenu(
                         toConfirm = confirm[7],
                         onLongClick = { onLongClickItem(7) },
                         onClick = onPinClicked,
+                    )
+                }
+                if (onHideClicked != null) {
+                    Button(
+                        title = "Hide",
+                        icon = Icons.Outlined.VisibilityOff,
+                        toConfirm = confirm[8],
+                        onLongClick = { onLongClickItem(8) },
+                        onClick = onHideClicked,
+                    )
+                }
+                if (onUnhideClicked != null) {
+                    Button(
+                        title = "Unhide",
+                        icon = Icons.Outlined.Visibility,
+                        toConfirm = confirm[9],
+                        onLongClick = { onLongClickItem(9) },
+                        onClick = onUnhideClicked,
                     )
                 }
                 if (onMarkAsReadClicked != null) {

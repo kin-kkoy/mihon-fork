@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.FileDownloadOff
 import androidx.compose.material.icons.outlined.RemoveDone
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -79,6 +81,10 @@ fun MangaChapterListItem(
     pinColor: Color? = null,
     pinExtraColors: List<Color> = emptyList(),
     pinNote: String? = null,
+    // Hidden chapters (shown via "Show") are dimmed with an eye-off mark
+    hidden: Boolean = false,
+    // ≡ handle shown while rearranging
+    dragHandle: (@Composable () -> Unit)? = null,
 ) {
     val start = getSwipeAction(
         action = chapterSwipeStartAction,
@@ -112,8 +118,11 @@ fun MangaChapterListItem(
                     onClick = onClick,
                     onLongClick = onLongClick,
                 )
-                .padding(start = 16.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
+                .padding(start = if (dragHandle != null) 4.dp else 16.dp, top = 12.dp, end = 8.dp, bottom = 12.dp)
+                .alpha(if (hidden) DISABLED_ALPHA else 1f),
+            verticalAlignment = if (dragHandle != null) Alignment.CenterVertically else Alignment.Top,
         ) {
+            dragHandle?.invoke()
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -151,6 +160,13 @@ fun MangaChapterListItem(
                         color = LocalContentColor.current.copy(alpha = if (read) DISABLED_ALPHA else 1f),
                         modifier = Modifier.weight(1f, fill = false),
                     )
+                    if (hidden) {
+                        Icon(
+                            imageVector = Icons.Outlined.VisibilityOff,
+                            contentDescription = "Hidden",
+                            modifier = Modifier.padding(start = 4.dp).size(14.dp),
+                        )
+                    }
                     pinExtraColors.forEach { color ->
                         Box(
                             modifier = Modifier
