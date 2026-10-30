@@ -1038,6 +1038,11 @@ class MangaScreenModel(
         }
     }
 
+    /** Opens or closes the whole "Sections" block at the top of the chapter list. */
+    fun togglePinSectionsOpen() {
+        updateSuccessState { it.copy(pinSectionsOpen = !it.pinSectionsOpen) }
+    }
+
     // Chapter arrangement (custom order + hidden chapters)
 
     fun toggleRearranging() {
@@ -1152,6 +1157,7 @@ class MangaScreenModel(
             val pinData: Map<String, ChapterPin> = emptyMap(),
             val pinFilter: PinFilter = PinFilter.All,
             val expandedPinSections: Set<Long> = emptySet(),
+            val pinSectionsOpen: Boolean = true,
             val customOrder: List<String>? = null,
             val hiddenUrls: Set<String> = emptySet(),
             val showHidden: Boolean = false,

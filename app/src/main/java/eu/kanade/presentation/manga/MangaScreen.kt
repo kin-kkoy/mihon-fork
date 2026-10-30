@@ -73,6 +73,7 @@ import eu.kanade.presentation.manga.components.MangaToolbar
 import eu.kanade.presentation.manga.components.MissingChapterCountListItem
 import eu.kanade.presentation.manga.components.PinFilterChipRow
 import eu.kanade.presentation.manga.components.PinSectionHeader
+import eu.kanade.presentation.manga.components.PinSectionsHeader
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.source.getNameForMangaInfo
@@ -150,6 +151,7 @@ fun MangaScreen(
     onPinClicked: (List<Chapter>) -> Unit,
     onPinFilterChange: (PinFilter) -> Unit,
     onTogglePinSection: (Long) -> Unit,
+    onTogglePinSectionsOpen: () -> Unit,
 
     // Chapter arrangement
     arrangeActions: ChapterArrangeActions,
@@ -198,6 +200,7 @@ fun MangaScreen(
             onPinClicked = onPinClicked,
             onPinFilterChange = onPinFilterChange,
             onTogglePinSection = onTogglePinSection,
+            onTogglePinSectionsOpen = onTogglePinSectionsOpen,
             arrangeActions = arrangeActions,
         )
     } else {
@@ -237,6 +240,7 @@ fun MangaScreen(
             onPinClicked = onPinClicked,
             onPinFilterChange = onPinFilterChange,
             onTogglePinSection = onTogglePinSection,
+            onTogglePinSectionsOpen = onTogglePinSectionsOpen,
             arrangeActions = arrangeActions,
         )
     }
@@ -294,6 +298,7 @@ private fun MangaScreenSmallImpl(
     onPinClicked: (List<Chapter>) -> Unit,
     onPinFilterChange: (PinFilter) -> Unit,
     onTogglePinSection: (Long) -> Unit,
+    onTogglePinSectionsOpen: () -> Unit,
 
     // Chapter arrangement
     arrangeActions: ChapterArrangeActions,
@@ -505,6 +510,7 @@ private fun MangaScreenSmallImpl(
                         onChapterSwipe = onChapterSwipe,
                         onPinFilterChange = onPinFilterChange,
                         onTogglePinSection = onTogglePinSection,
+                        onTogglePinSectionsOpen = onTogglePinSectionsOpen,
                     )
 
                     sharedChapterItems(
@@ -583,6 +589,7 @@ fun MangaScreenLargeImpl(
     onPinClicked: (List<Chapter>) -> Unit,
     onPinFilterChange: (PinFilter) -> Unit,
     onTogglePinSection: (Long) -> Unit,
+    onTogglePinSectionsOpen: () -> Unit,
 
     // Chapter arrangement
     arrangeActions: ChapterArrangeActions,
@@ -789,6 +796,7 @@ fun MangaScreenLargeImpl(
                                 onChapterSwipe = onChapterSwipe,
                                 onPinFilterChange = onPinFilterChange,
                                 onTogglePinSection = onTogglePinSection,
+                                onTogglePinSectionsOpen = onTogglePinSectionsOpen,
                             )
 
                             sharedChapterItems(
@@ -951,8 +959,7 @@ private fun LazyListScope.sharedChapterItems(
                     onChapterSwipe = {
                         onChapterSwipe(item, it)
                     },
-                    pinColor = pins[item.id]?.primary?.let { Color(it.color) },
-                    pinExtraColors = pins[item.id]?.sections.orEmpty().drop(1).map { Color(it.color) },
+                    pinColors = pins[item.id]?.sections.orEmpty().map { Color(it.color) },
                     pinNote = pins[item.id]?.note,
                     hidden = item.chapter.url in hiddenUrls,
                     dragHandle = dragHandle,
@@ -981,8 +988,9 @@ private fun LazyListScope.sharedChapterItems(
 }
 
 /**
- * Chip row (All / Bookmarked / sections) and one collapsible group per section at the top of
- * the chapter list. Only shown when this manga has pinned chapters.
+ * Chip row (All / Bookmarked / sections), then a "Sections · N" block (open by default) holding one
+ * collapsible group per section, at the top of the chapter list. Only shown when this manga has
+ * pinned chapters.
  */
 private fun LazyListScope.chapterPinItems(
     state: MangaScreenModel.State.Success,
@@ -995,6 +1003,7 @@ private fun LazyListScope.chapterPinItems(
     onChapterSwipe: (ChapterList.Item, LibraryPreferences.ChapterSwipeAction) -> Unit,
     onPinFilterChange: (PinFilter) -> Unit,
     onTogglePinSection: (Long) -> Unit,
+    onTogglePinSectionsOpen: () -> Unit,
 ) {
     val sections = state.usedPinSections
     if (sections.isEmpty() || state.rearranging) return
@@ -1009,35 +1018,48 @@ private fun LazyListScope.chapterPinItems(
 
     if (state.pinFilter != PinFilter.All) return
 
-    sections.forEach { section ->
+    val groups = sections.mapNotNull { section ->
         val pinned = state.processedChapters.filter { item ->
             state.pinByChapterId[item.id]?.sections.orEmpty().any { it.id == section.id }
         }
-        if (pinned.isEmpty()) return@forEach
-        val expanded = section.id in state.expandedPinSections
-        item(key = "pin-section-${section.id}", contentType = "pin-section") {
-            PinSectionHeader(
-                section = section,
-                count = pinned.size,
-                expanded = expanded,
-                onClick = { onTogglePinSection(section.id) },
-            )
-        }
-        if (expanded) {
-            sharedChapterItems(
-                manga = state.manga,
-                chapters = pinned,
-                pins = state.pinByChapterId,
-                isAnyChapterSelected = isAnyChapterSelected,
-                chapterSwipeStartAction = chapterSwipeStartAction,
-                chapterSwipeEndAction = chapterSwipeEndAction,
-                onChapterClicked = onChapterClicked,
-                onDownloadChapter = onDownloadChapter,
-                onChapterSelected = onChapterSelected,
-                onChapterSwipe = onChapterSwipe,
-                keyPrefix = "pin-${section.id}-",
-                hiddenUrls = state.hiddenUrls,
-            )
+        if (pinned.isEmpty()) null else section to pinned
+    }
+    if (groups.isEmpty()) return
+
+    item(key = "pin-sections-header", contentType = "pin-sections-header") {
+        PinSectionsHeader(
+            count = groups.size,
+            expanded = state.pinSectionsOpen,
+            onClick = onTogglePinSectionsOpen,
+        )
+    }
+    if (state.pinSectionsOpen) {
+        groups.forEach { (section, pinned) ->
+            val expanded = section.id in state.expandedPinSections
+            item(key = "pin-section-${section.id}", contentType = "pin-section") {
+                PinSectionHeader(
+                    section = section,
+                    count = pinned.size,
+                    expanded = expanded,
+                    onClick = { onTogglePinSection(section.id) },
+                )
+            }
+            if (expanded) {
+                sharedChapterItems(
+                    manga = state.manga,
+                    chapters = pinned,
+                    pins = state.pinByChapterId,
+                    isAnyChapterSelected = isAnyChapterSelected,
+                    chapterSwipeStartAction = chapterSwipeStartAction,
+                    chapterSwipeEndAction = chapterSwipeEndAction,
+                    onChapterClicked = onChapterClicked,
+                    onDownloadChapter = onDownloadChapter,
+                    onChapterSelected = onChapterSelected,
+                    onChapterSwipe = onChapterSwipe,
+                    keyPrefix = "pin-${section.id}-",
+                    hiddenUrls = state.hiddenUrls,
+                )
+            }
         }
     }
     item(key = "pin-divider", contentType = "pin-divider") {

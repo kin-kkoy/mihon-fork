@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,14 +18,19 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.chapter.service.PinSection
@@ -110,5 +116,93 @@ fun PinSectionHeader(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.rotate(rotation),
         )
+    }
+}
+
+/** Header of the "Sections · N" block holding all section groups; collapses the whole block. */
+@Composable
+fun PinSectionsHeader(
+    count: Int,
+    expanded: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val rotation by animateFloatAsState(if (expanded) 0f else -90f, label = "caret")
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "SECTIONS · $count",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            imageVector = Icons.Filled.KeyboardArrowDown,
+            contentDescription = if (expanded) "Collapse sections" else "Expand sections",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.rotate(rotation),
+        )
+    }
+}
+
+/**
+ * The bookmark icon in its section colors: one color fills it, several split it into equal
+ * vertical strips (halves, thirds, quarters...). No colors = the theme's primary.
+ */
+@Composable
+fun SplitBookmarkIcon(
+    colors: List<Color>,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+) {
+    // The bookmark in Icons.Filled.Bookmark spans x 5..19 of its 24-wide viewport
+    SplitColorIcon(
+        painter = rememberVectorPainter(Icons.Filled.Bookmark),
+        colors = colors.ifEmpty { listOf(MaterialTheme.colorScheme.primary) },
+        contentDescription = contentDescription,
+        modifier = modifier,
+        left = 5f / 24f,
+        right = 19f / 24f,
+    )
+}
+
+/**
+ * Draws [painter] once per color, each copy clipped to its own equal-width vertical strip of the
+ * shape, which spans [left]..[right] (fractions of the icon's width). One color = a plain tinted icon.
+ */
+@Composable
+fun SplitColorIcon(
+    painter: Painter,
+    colors: List<Color>,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    left: Float = 0f,
+    right: Float = 1f,
+) {
+    if (colors.size <= 1) {
+        Icon(painter, contentDescription, modifier, tint = colors.firstOrNull() ?: LocalContentColor.current)
+        return
+    }
+    Box(modifier) {
+        val n = colors.size
+        colors.forEachIndexed { i, color ->
+            Icon(
+                painter = painter,
+                contentDescription = if (i == 0) contentDescription else null,
+                tint = color,
+                modifier = Modifier.drawWithContent {
+                    val w = size.width
+                    val start = if (i == 0) 0f else w * (left + (right - left) * i / n)
+                    val end = if (i == n - 1) w else w * (left + (right - left) * (i + 1) / n)
+                    clipRect(left = start, right = end) { this@drawWithContent.drawContent() }
+                },
+            )
+        }
     }
 }

@@ -50,7 +50,8 @@ data class EntryRef(val key: String, val title: String)
 /**
  * The section list of the pin dialogs for one entry: "This entry" sections first, then
  * "All entries" ones. Normal mode ticks sections; [managing] mode renames, recolors, changes
- * scope or deletes. Ends with the new-section form (or its "+ New section" button).
+ * scope or deletes. Ends with the new-section form (or its "+ New section" button), whose
+ * [draft] the dialog holds so its own Save / Pin can add a half-typed section ([saveHint] says so).
  */
 @Composable
 internal fun SectionPickerList(
@@ -59,12 +60,12 @@ internal fun SectionPickerList(
     picks: List<Long>,
     onPicksChange: (List<Long>) -> Unit,
     managing: Boolean,
-    startAdding: Boolean = false,
+    draft: NewSectionDraft,
+    saveHint: String? = null,
     showCounts: Boolean = false,
 ) {
     val sections by store.sections.collectAsState(store.getSections())
     val pins by store.pins.collectAsState(store.getPins())
-    var adding by remember { mutableStateOf(startAdding) }
     val changeScope = rememberSectionScopeChanger(store, contextEntry = entry.key)
 
     val own = sections.filter { it.manga == entry.key }
@@ -82,7 +83,7 @@ internal fun SectionPickerList(
                     scopeLabel = if (section.isShared) "All" else entry.title,
                     onScopeClick = { changeScope(section) },
                     onRename = { store.renameSection(section.id, it) },
-                    onRecolor = { store.recolorSection(section.id, nextColor(section.color)) },
+                    onRecolor = { store.recolorSection(section.id, it) },
                     onDelete = {
                         store.deleteSection(section.id)
                         onPicksChange(picks - section.id)
@@ -104,19 +105,15 @@ internal fun SectionPickerList(
         Rows(own, "No sections for this entry yet")
         SectionGroupLabel(Icons.Outlined.Public, "All entries")
         Rows(shared, "No shared sections")
-        if (adding) {
+        if (draft.open) {
             NewSectionForm(
-                store = store,
+                draft = draft,
                 entries = listOf(entry),
-                initialEntry = entry.key,
-                onAdded = {
-                    onPicksChange(picks + it)
-                    adding = false
-                },
-                onCancel = { adding = false },
+                saveHint = saveHint,
+                onAdd = { draft.commit()?.let { onPicksChange(picks + it) } },
             )
         } else if (!managing) {
-            TextButton(onClick = { adding = true }) { Text("+ New section") }
+            TextButton(onClick = { draft.open = true }) { Text("+ New section") }
         }
     }
 }
@@ -139,46 +136,41 @@ internal fun SectionGroupLabel(icon: ImageVector, text: String) {
 }
 
 /**
- * Name + color + scope for a new section. Scope defaults to one entry ([initialEntry]); when
+ * Name + color + scope for a new section, kept in [draft]. Scope defaults to one entry; when
  * several [entries] are possible a dropdown picks which. With no entries it can only be shared.
+ * [saveHint] is added to the scope line when the dialog's main button also adds the section.
  */
 @Composable
 internal fun NewSectionForm(
-    store: ChapterPinStore,
+    draft: NewSectionDraft,
     entries: List<EntryRef>,
-    initialEntry: String?,
-    onAdded: (Long) -> Unit,
-    onCancel: () -> Unit,
+    onAdd: () -> Unit,
+    saveHint: String? = null,
 ) {
-    var name by remember { mutableStateOf("") }
-    var color by remember { mutableStateOf(ChapterPinStore.PALETTE[store.getSections().size % ChapterPinStore.PALETTE.size]) }
-    var shared by remember { mutableStateOf(entries.isEmpty()) }
-    var entryKey by remember { mutableStateOf(initialEntry ?: entries.firstOrNull()?.key) }
     var pickerOpen by remember { mutableStateOf(false) }
-    val entry = entries.find { it.key == entryKey }
+    val shared = draft.shared
+    val entry = entries.find { it.key == draft.entryKey }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
+            value = draft.name,
+            onValueChange = { draft.name = it },
             placeholder = { Text("Section name, e.g. Re-read") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ChapterPinStore.PALETTE.forEach { c -> ColorDot(color = Color(c), selected = c == color, onClick = { color = c }) }
-        }
+        SectionColorSwatches(color = draft.color, onColorChange = { draft.color = it })
         if (entries.isNotEmpty()) {
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 SegmentedButton(
                     selected = !shared,
-                    onClick = { shared = false },
+                    onClick = { draft.shared = false },
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                     icon = { Icon(Icons.AutoMirrored.Outlined.MenuBook, null, Modifier.size(16.dp)) },
                 ) { Text(if (entries.size == 1) "This entry" else "One entry", maxLines = 1) }
                 SegmentedButton(
                     selected = shared,
-                    onClick = { shared = true },
+                    onClick = { draft.shared = true },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                     icon = { Icon(Icons.Outlined.Public, null, Modifier.size(16.dp)) },
                 ) { Text("All entries", maxLines = 1) }
@@ -210,7 +202,7 @@ internal fun NewSectionForm(
                             DropdownMenuItem(
                                 text = { Text(e.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                 onClick = {
-                                    entryKey = e.key
+                                    draft.entryKey = e.key
                                     pickerOpen = false
                                 },
                             )
@@ -221,15 +213,15 @@ internal fun NewSectionForm(
         }
         Text(
             text = (if (shared) "Shows when pinning in any entry." else "Only shows when pinning in ${entry?.title ?: "that entry"}.") +
-                " You can change this later.",
+                " You can change this later." + saveHint?.let { " $it" }.orEmpty(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = onCancel) { Text("Cancel") }
+            TextButton(onClick = draft::reset) { Text("Cancel") }
             TextButton(
-                enabled = name.isNotBlank() && (shared || entry != null),
-                onClick = { onAdded(store.addSection(name, color, if (shared) null else entry?.key)) },
+                enabled = draft.name.isNotBlank() && (shared || entry != null),
+                onClick = onAdd,
             ) { Text("Add") }
         }
     }
@@ -302,9 +294,4 @@ internal fun rememberSectionScopeChanger(store: ChapterPinStore, contextEntry: S
             }
         }
     }
-}
-
-internal fun nextColor(color: Int): Int {
-    val palette = ChapterPinStore.PALETTE
-    return palette[(palette.indexOf(color) + 1) % palette.size]
 }

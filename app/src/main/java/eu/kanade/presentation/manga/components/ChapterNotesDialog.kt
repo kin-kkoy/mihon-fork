@@ -68,6 +68,7 @@ fun ChapterNotesDialog(
     var accordionOpen by remember { mutableStateOf(startWithNewSection) }
     var managing by remember { mutableStateOf(false) }
     var managingPresets by remember { mutableStateOf(false) }
+    val draft = rememberNewSectionDraft(store, listOf(entry), entry.key, startOpen = startWithNewSection)
 
     val picked = (sections.filter { it.manga == entry.key } + sections.filter { it.isShared }).filter { it.id in picks }
 
@@ -227,7 +228,8 @@ fun ChapterNotesDialog(
                                 picks = picks,
                                 onPicksChange = { picks = it },
                                 managing = managing,
-                                startAdding = startWithNewSection,
+                                draft = draft,
+                                saveHint = "Save also adds it and pins this chapter.",
                             )
                         }
                     }
@@ -235,7 +237,14 @@ fun ChapterNotesDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(picks.filter { id -> sections.any { it.id == id } }, note) }) {
+            TextButton(
+                onClick = {
+                    // A typed-in new section whose Add button was hidden (e.g. by the keyboard) is added too
+                    val added = draft.commit()
+                    val existing = store.getSections().map { it.id }.toSet()
+                    onSave((picks + listOfNotNull(added)).filter { it in existing }, note)
+                },
+            ) {
                 Text("Save")
             }
         },

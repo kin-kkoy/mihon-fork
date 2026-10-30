@@ -174,6 +174,7 @@ class MangaScreen(
             onPinClicked = screenModel::showPinDialog,
             onPinFilterChange = screenModel::setPinFilter,
             onTogglePinSection = screenModel::togglePinSectionExpanded,
+            onTogglePinSectionsOpen = screenModel::togglePinSectionsOpen,
             arrangeActions = remember(screenModel) {
                 ChapterArrangeActions(
                     onToggleRearrange = screenModel::toggleRearranging,

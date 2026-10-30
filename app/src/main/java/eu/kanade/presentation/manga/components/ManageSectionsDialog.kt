@@ -12,10 +12,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.chapter.service.ChapterPinStore
@@ -37,7 +33,7 @@ fun ManageSectionsDialog(
     startAdding: Boolean,
     onDismissRequest: () -> Unit,
 ) {
-    var adding by remember { mutableStateOf(startAdding) }
+    val draft = rememberNewSectionDraft(store, entries, contextEntry, startOpen = startAdding)
     val changeScope = rememberSectionScopeChanger(store, contextEntry)
 
     @Composable
@@ -51,7 +47,7 @@ fun ManageSectionsDialog(
                 scopeLabel = if (section.isShared) "All" else ownerTitle(section) ?: "One entry",
                 onScopeClick = { changeScope(section) },
                 onRename = { store.renameSection(section.id, it) },
-                onRecolor = { store.recolorSection(section.id, nextColor(section.color)) },
+                onRecolor = { store.recolorSection(section.id, it) },
                 onDelete = { store.deleteSection(section.id) },
             )
         }
@@ -74,16 +70,10 @@ fun ManageSectionsDialog(
                 Rows(sections.filter { it.isShared })
                 SectionGroupLabel(Icons.AutoMirrored.Outlined.MenuBook, "Entry sections")
                 Rows(sections.filterNot { it.isShared })
-                if (adding) {
-                    NewSectionForm(
-                        store = store,
-                        entries = entries,
-                        initialEntry = contextEntry,
-                        onAdded = { adding = false },
-                        onCancel = { adding = false },
-                    )
+                if (draft.open) {
+                    NewSectionForm(draft = draft, entries = entries, onAdd = { draft.commit() })
                 } else {
-                    TextButton(onClick = { adding = true }) { Text("+ New section") }
+                    TextButton(onClick = { draft.open = true }) { Text("+ New section") }
                 }
             }
         },

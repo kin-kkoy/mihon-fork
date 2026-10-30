@@ -46,6 +46,7 @@ import eu.kanade.domain.chapter.service.PinSection
 import eu.kanade.domain.chapter.service.ResolvedPin
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
+import eu.kanade.presentation.manga.components.SplitColorIcon
 import eu.kanade.tachiyomi.R
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -176,17 +177,36 @@ private fun RowScope.BookmarkPinButton(
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                painter = painterResource(
-                    if (bookmarked) R.drawable.ic_bookmark_pin_24dp else R.drawable.ic_bookmark_pin_outline_24dp,
-                ),
-                contentDescription = "Bookmark (hold to pin)",
-                tint = when {
-                    sectionColor != null -> sectionColor
-                    bookmarked -> MaterialTheme.colorScheme.primary
-                    else -> LocalContentColor.current
-                },
-            )
+            val sectionColors = pin?.sections.orEmpty().map { Color(it.color) }
+            if (bookmarked && sectionColors.size > 1) {
+                // In several sections: the bookmark is split into their colors, the pin badge keeps the first
+                Box {
+                    SplitColorIcon(
+                        painter = painterResource(R.drawable.ic_bookmark_pin_body_24dp),
+                        colors = sectionColors,
+                        contentDescription = "Bookmark (hold to pin)",
+                        left = 4f / 24f,
+                        right = 18f / 24f,
+                    )
+                    Icon(
+                        painter = painterResource(R.drawable.ic_bookmark_pin_badge_24dp),
+                        contentDescription = null,
+                        tint = sectionColors.first(),
+                    )
+                }
+            } else {
+                Icon(
+                    painter = painterResource(
+                        if (bookmarked) R.drawable.ic_bookmark_pin_24dp else R.drawable.ic_bookmark_pin_outline_24dp,
+                    ),
+                    contentDescription = "Bookmark (hold to pin)",
+                    tint = when {
+                        sectionColor != null -> sectionColor
+                        bookmarked -> MaterialTheme.colorScheme.primary
+                        else -> LocalContentColor.current
+                    },
+                )
+            }
         }
 
         if (menuOpen) {

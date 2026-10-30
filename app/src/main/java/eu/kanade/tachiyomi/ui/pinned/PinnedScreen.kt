@@ -68,6 +68,7 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.manga.components.EntryRef
 import eu.kanade.presentation.manga.components.ManageSectionsDialog
 import eu.kanade.presentation.manga.components.MangaCover
+import eu.kanade.presentation.manga.components.SplitBookmarkIcon
 import eu.kanade.presentation.manga.components.pinnedGlow
 import eu.kanade.presentation.security.OtherSideRevealBox
 import eu.kanade.presentation.security.rememberOtherSideGate
@@ -445,7 +446,11 @@ private fun PinnedRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(Icons.Filled.Bookmark, null, tint = color, modifier = Modifier.size(14.dp))
+                SplitBookmarkIcon(
+                    colors = (listOfNotNull(section) + others).map { Color(it.color) },
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                )
                 Text(
                     text = entry.chapter.name,
                     style = MaterialTheme.typography.bodySmall,

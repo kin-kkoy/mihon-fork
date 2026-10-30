@@ -12,7 +12,7 @@ import tachiyomi.domain.manga.model.Manga
 
 /**
  * A user-made group of pinned chapters ("Best moments", "Lore", ...).
- * [color] is an ARGB int picked from [PALETTE]. [manga] is the entry it belongs to
+ * [color] is an ARGB int, one of [PALETTE] or a custom one. [manga] is the entry it belongs to
  * (see [ChapterPinStore.mangaKey]); null means it's shared by all entries.
  */
 @Serializable
@@ -276,7 +276,10 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
             return if (parts.size == 3) "${parts[0]}|${parts[1]}" else null
         }
 
-        /** Gold, coral, teal, sky, pink, lime — same as the approved prototype. */
+        /**
+         * Preset colors: gold, coral, teal, sky, pink, lime, violet, orange, cyan, magenta, yellow.
+         * Any other color can be picked with the custom picker too.
+         */
         val PALETTE = listOf(
             0xFFF2B544.toInt(),
             0xFFFF7A6B.toInt(),
@@ -284,6 +287,11 @@ class ChapterPinStore(preferenceStore: PreferenceStore) {
             0xFF5FB4FF.toInt(),
             0xFFFF6FB5.toInt(),
             0xFFA6E05A.toInt(),
+            0xFFB18CFF.toInt(),
+            0xFFFF9F43.toInt(),
+            0xFF2EC4F1.toInt(),
+            0xFFE84393.toInt(),
+            0xFFF6E05E.toInt(),
         )
     }
 }

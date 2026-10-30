@@ -3,16 +3,13 @@ package eu.kanade.presentation.manga.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.BookmarkRemove
@@ -76,16 +73,16 @@ fun MangaChapterListItem(
     onDownloadClick: ((ChapterDownloadAction) -> Unit)?,
     onChapterSwipe: (LibraryPreferences.ChapterSwipeAction) -> Unit,
     modifier: Modifier = Modifier,
-    // Pinned to user sections: [pinColor] (first section) tints the bookmark and glow, each of
-    // [pinExtraColors] (other sections) adds a dot after the title, the stripe is split between all
-    pinColor: Color? = null,
-    pinExtraColors: List<Color> = emptyList(),
+    // Pinned to user sections, one color per section: the bookmark and the left stripe are split
+    // between all of them, the glow and note use the first
+    pinColors: List<Color> = emptyList(),
     pinNote: String? = null,
     // Hidden chapters (shown via "Show") are dimmed with an eye-off mark
     hidden: Boolean = false,
     // ≡ handle shown while rearranging
     dragHandle: (@Composable () -> Unit)? = null,
 ) {
+    val pinColor = pinColors.firstOrNull()
     val start = getSwipeAction(
         action = chapterSwipeStartAction,
         read = read,
@@ -112,7 +109,7 @@ fun MangaChapterListItem(
     ) {
         Row(
             modifier = modifier
-                .then(if (pinColor != null && !selected) Modifier.pinnedGlow(listOf(pinColor) + pinExtraColors) else Modifier)
+                .then(if (pinColor != null && !selected) Modifier.pinnedGlow(pinColors) else Modifier)
                 .selectedBackground(selected)
                 .combinedClickable(
                     onClick = onClick,
@@ -143,12 +140,11 @@ fun MangaChapterListItem(
                         )
                     }
                     if (bookmark || pinColor != null) {
-                        Icon(
-                            imageVector = Icons.Filled.Bookmark,
+                        SplitBookmarkIcon(
+                            colors = pinColors,
                             contentDescription = stringResource(MR.strings.action_filter_bookmarked),
                             modifier = Modifier
                                 .sizeIn(maxHeight = with(LocalDensity.current) { textHeight.toDp() - 2.dp }),
-                            tint = pinColor ?: MaterialTheme.colorScheme.primary,
                         )
                     }
                     Text(
@@ -165,14 +161,6 @@ fun MangaChapterListItem(
                             imageVector = Icons.Outlined.VisibilityOff,
                             contentDescription = "Hidden",
                             modifier = Modifier.padding(start = 4.dp).size(14.dp),
-                        )
-                    }
-                    pinExtraColors.forEach { color ->
-                        Box(
-                            modifier = Modifier
-                                .padding(start = 2.dp)
-                                .size(7.dp)
-                                .background(color, CircleShape),
                         )
                     }
                 }

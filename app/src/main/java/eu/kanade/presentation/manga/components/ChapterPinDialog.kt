@@ -1,5 +1,6 @@
 package eu.kanade.presentation.manga.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,8 +31,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.domain.chapter.service.PinSection
+import kotlinx.coroutines.delay
 
 /**
  * "Pin to sections" sheet: tick (or create / manage) sections, add an optional note,
@@ -67,6 +71,7 @@ fun ChapterPinDialog(
     var note by remember { mutableStateOf(initialNote) }
     var managing by remember { mutableStateOf(false) }
     var managingPresets by remember { mutableStateOf(false) }
+    val draft = rememberNewSectionDraft(store, listOf(entry), entry.key)
 
     val validPicks = picks.filter { id -> sections.any { it.id == id } }
 
@@ -103,6 +108,8 @@ fun ChapterPinDialog(
                     picks = picks,
                     onPicksChange = { picks = it },
                     managing = managing,
+                    draft = draft,
+                    saveHint = "Pin also adds it.",
                     showCounts = true,
                 )
 
@@ -175,8 +182,13 @@ fun ChapterPinDialog(
                 TextButton(onClick = { managing = false }) { Text("Done") }
             } else {
                 TextButton(
-                    enabled = validPicks.isNotEmpty(),
-                    onClick = { onPin(validPicks, note) },
+                    enabled = validPicks.isNotEmpty() || draft.isPending,
+                    onClick = {
+                        // A typed-in new section whose Add button was hidden (e.g. by the keyboard) is added too
+                        val added = draft.commit()
+                        val existing = store.getSections().map { it.id }.toSet()
+                        onPin((validPicks + listOfNotNull(added)).filter { it in existing }, note)
+                    },
                 ) { Text("Pin") }
             }
         },
@@ -235,27 +247,39 @@ internal fun ManageSectionRow(
     scopeLabel: String,
     onScopeClick: () -> Unit,
     onRename: (String) -> Unit,
-    onRecolor: () -> Unit,
+    onRecolor: (Int) -> Unit,
     onDelete: () -> Unit,
 ) {
     var name by remember(section.id) { mutableStateOf(section.name) }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        ColorDot(color = Color(section.color), selected = false, onClick = onRecolor)
-        OutlinedTextField(
-            value = name,
-            onValueChange = {
-                name = it
-                onRename(it)
-            },
-            singleLine = true,
-            modifier = Modifier.weight(1f),
-        )
-        ScopeChip(shared = section.isShared, label = scopeLabel, onClick = onScopeClick)
-        IconButton(onClick = onDelete) {
-            Icon(Icons.Outlined.Close, contentDescription = "Delete section")
+    var colorOpen by remember(section.id) { mutableStateOf(false) }
+    // Picked locally and saved shortly after, so dragging in the custom picker doesn't save every frame
+    var color by remember(section.id) { mutableIntStateOf(section.color) }
+    LaunchedEffect(color) {
+        delay(250)
+        if (color != section.color) onRecolor(color)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ColorDot(color = Color(color), selected = colorOpen, onClick = { colorOpen = !colorOpen })
+            OutlinedTextField(
+                value = name,
+                onValueChange = {
+                    name = it
+                    onRename(it)
+                },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            ScopeChip(shared = section.isShared, label = scopeLabel, onClick = onScopeClick)
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Outlined.Close, contentDescription = "Delete section")
+            }
+        }
+        AnimatedVisibility(visible = colorOpen) {
+            SectionColorSwatches(color = color, onColorChange = { color = it })
         }
     }
 }
