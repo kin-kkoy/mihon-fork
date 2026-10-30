@@ -5,14 +5,16 @@ import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkerParameters
+import dev.zacsweers.metro.Inject
 import eu.kanade.tachiyomi.data.download.Downloader.Companion.TMP_DIR_SUFFIX
 import eu.kanade.tachiyomi.util.system.workManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import logcat.LogPriority
-import tachiyomi.core.common.util.lang.withIOContext
+import mihon.app.di.AppGraph
+import mihon.core.metro.metroGraph
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.storage.service.StorageManager
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 /**
  * Deletes orphaned temporary download folders (`<chapter>_tmp` and
@@ -23,14 +25,21 @@ import uy.kohesive.injekt.api.get
 class TempCacheCleanupJob(private val context: Context, workerParams: WorkerParameters) :
     CoroutineWorker(context, workerParams) {
 
-    private val storageManager: StorageManager = Injekt.get()
-    private val downloadCache: DownloadCache = Injekt.get()
+    @Inject private lateinit var storageManager: StorageManager
+
+    @Inject private lateinit var downloadCache: DownloadCache
+
+    @Inject private lateinit var downloader: Downloader
+
+    init {
+        context.metroGraph<AppGraph>().inject(this)
+    }
 
     override suspend fun doWork(): Result {
         // Never clean while downloads are active — an in-progress download owns a *_tmp dir.
-        if (DownloadJob.isRunning(context)) return Result.success()
+        if (downloader.isRunning) return Result.success()
 
-        return withIOContext {
+        return withContext(Dispatchers.IO) {
             try {
                 val deleted = purgeOrphanedTempDirs()
                 if (deleted > 0) {

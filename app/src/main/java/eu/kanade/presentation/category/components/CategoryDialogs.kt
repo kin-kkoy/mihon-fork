@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import eu.kanade.core.preference.asToggleableState
@@ -54,17 +55,13 @@ import eu.kanade.presentation.category.visualName
 import eu.kanade.presentation.security.rememberOtherSideGate
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.library.OtherSideColorScheme
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import mihon.app.di.appGraph
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.domain.category.model.Category
-import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import kotlin.time.Duration.Companion.seconds
 
 @Composable
 fun CategoryCreateDialog(
@@ -122,8 +119,6 @@ fun CategoryCreateDialog(
     )
 
     LaunchedEffect(focusRequester) {
-        // TODO: https://issuetracker.google.com/issues/204502668
-        delay(0.1.seconds)
         focusRequester.requestFocus()
     }
 }
@@ -145,7 +140,7 @@ fun CategoryRenameDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = {
             TextButton(
-                enabled = valueHasChanged && !nameAlreadyExists,
+                enabled = valueHasChanged && name.isNotEmpty() && !nameAlreadyExists,
                 onClick = {
                     onRename(name)
                     onDismissRequest()
@@ -186,8 +181,6 @@ fun CategoryRenameDialog(
     )
 
     LaunchedEffect(focusRequester) {
-        // TODO: https://issuetracker.google.com/issues/204502668
-        delay(0.1.seconds)
         focusRequester.requestFocus()
     }
 }
@@ -252,7 +245,8 @@ fun ChangeCategoryDialog(
         return
     }
     // Categories that belong to the "OtherSide" are hidden behind the yin-yang toggle.
-    val otherSideIds = remember { Injekt.get<LibraryPreferences>().otherSideCategoryIds.get() }
+    val context = LocalContext.current
+    val otherSideIds = remember { context.appGraph.libraryPreferences.otherSideCategoryIds.get() }
     var normalSelection by remember {
         mutableStateOf(initialSelection.filter { it.value.id.toString() !in otherSideIds })
     }

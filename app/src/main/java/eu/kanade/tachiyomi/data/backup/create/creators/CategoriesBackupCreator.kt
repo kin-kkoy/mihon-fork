@@ -1,20 +1,21 @@
 package eu.kanade.tachiyomi.data.backup.create.creators
 
+import dev.zacsweers.metro.Inject
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.backupCategoryMapper
 import eu.kanade.tachiyomi.ui.security.RepressManager
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.service.LibraryPreferences
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
+@Inject
 class CategoriesBackupCreator(
-    private val getCategories: GetCategories = Injekt.get(),
-    private val libraryPreferences: LibraryPreferences = Injekt.get(),
+    private val getCategories: GetCategories,
+    private val libraryPreferences: LibraryPreferences,
 ) {
 
     suspend operator fun invoke(): List<BackupCategory> {
+        // While OtherSide is repressed, its categories are left out of backups
         val otherSideCategoryIds = if (RepressManager.isRepressed) {
             libraryPreferences.otherSideCategoryIds.get()
         } else {

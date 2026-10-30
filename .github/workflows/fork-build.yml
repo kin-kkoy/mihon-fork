@@ -36,14 +36,20 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Decode signing keystore
+        run: echo "$SIGNING_KEY" | base64 -d > "${{ runner.temp }}/antsy.keystore"
+        env:
+          SIGNING_KEY: ${{ secrets.storeFileBase64 }}
+
       - name: Build release APK
         env:
           MIHON_GITHUB_RELEASE: "true"
-          storeFileBase64: ${{ secrets.storeFileBase64 }}
+          storeFile: ${{ runner.temp }}/antsy.keystore
           storePassword: ${{ secrets.storePassword }}
           keyAlias: ${{ secrets.keyAlias }}
           keyPassword: ${{ secrets.keyPassword }}
-        run: ./gradlew assembleRelease --stacktrace -Penable-updater
+        # No -Pdist: telemetry stays off. Updater forced on.
+        run: ./gradlew assembleRelease --stacktrace -Penable-updater -Pinclude-telemetry=false
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4

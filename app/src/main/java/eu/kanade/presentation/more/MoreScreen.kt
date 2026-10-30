@@ -4,17 +4,6 @@ import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
-import androidx.compose.material.icons.automirrored.outlined.Label
-import androidx.compose.material.icons.filled.VolunteerActivism
-import androidx.compose.material.icons.outlined.CloudOff
-import androidx.compose.material.icons.outlined.GetApp
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.NewReleases
-import androidx.compose.material.icons.outlined.QueryStats
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
@@ -34,18 +23,28 @@ import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.presentation.security.RepressDurationDialog
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.core.security.SecurityPreferences
-import eu.kanade.tachiyomi.data.updater.AppUpdateChecker
 import eu.kanade.tachiyomi.ui.more.DownloadQueueState
 import eu.kanade.tachiyomi.ui.security.RepressManager
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.system.updaterEnabled
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import logcat.LogPriority
+import mihon.app.di.appGraph
+import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.automirroredrounded.Help
+import mihon.icons.materialsymbols.automirroredrounded.Label
+import mihon.icons.materialsymbols.rounded.CloudOff
+import mihon.icons.materialsymbols.rounded.Download
+import mihon.icons.materialsymbols.rounded.Info
+import mihon.icons.materialsymbols.rounded.NewReleases
+import mihon.icons.materialsymbols.rounded.QueryStats
+import mihon.icons.materialsymbols.rounded.Settings
+import mihon.icons.materialsymbols.rounded.Storage
+import mihon.icons.materialsymbols.roundedfilled.VolunteerActivism
 import tachiyomi.core.common.Constants
-import tachiyomi.core.common.util.lang.withIOContext
-import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.i18n.MR
@@ -54,8 +53,6 @@ import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 @Composable
 fun MoreScreen(
@@ -79,7 +76,7 @@ fun MoreScreen(
 
     // "Repress the OtherSide" state. otherSideRepressedUntil is the single source of truth; observe
     // it so the row flips between "start" and "live countdown + extend" without a manual refresh.
-    val securityPreferences = remember { Injekt.get<SecurityPreferences>() }
+    val securityPreferences = remember { context.appGraph.securityPreferences }
     val repressedUntil by securityPreferences.otherSideRepressedUntil.collectAsState()
     val repressed = repressedUntil > 0
     var showRepressDialog by remember { mutableStateOf(false) }
@@ -133,7 +130,7 @@ fun MoreScreen(
                 SwitchPreferenceWidget(
                     title = stringResource(MR.strings.label_downloaded_only),
                     subtitle = stringResource(MR.strings.downloaded_only_summary),
-                    icon = Icons.Outlined.CloudOff,
+                    icon = MaterialSymbols.Rounded.CloudOff,
                     checked = downloadedOnly,
                     onCheckedChanged = onDownloadedOnlyChange,
                 )
@@ -165,21 +162,21 @@ fun MoreScreen(
                             pluralStringResource(MR.plurals.download_queue_summary, count = pending, pending)
                         }
                     },
-                    icon = Icons.Outlined.GetApp,
+                    icon = MaterialSymbols.Rounded.Download,
                     onPreferenceClick = onClickDownloadQueue,
                 )
             }
             item {
                 TextPreferenceWidget(
                     title = stringResource(MR.strings.categories),
-                    icon = Icons.AutoMirrored.Outlined.Label,
+                    icon = MaterialSymbols.AutoMirroredRounded.Label,
                     onPreferenceClick = onClickCategories,
                 )
             }
             item {
                 TextPreferenceWidget(
                     title = stringResource(MR.strings.label_stats),
-                    icon = Icons.Outlined.QueryStats,
+                    icon = MaterialSymbols.Rounded.QueryStats,
                     onPreferenceClick = onClickStats,
                 )
             }
@@ -193,7 +190,7 @@ fun MoreScreen(
             item {
                 TextPreferenceWidget(
                     title = stringResource(MR.strings.label_data_storage),
-                    icon = Icons.Outlined.Storage,
+                    icon = MaterialSymbols.Rounded.Storage,
                     onPreferenceClick = onClickDataAndStorage,
                 )
             }
@@ -221,21 +218,21 @@ fun MoreScreen(
             item {
                 TextPreferenceWidget(
                     title = stringResource(MR.strings.label_settings),
-                    icon = Icons.Outlined.Settings,
+                    icon = MaterialSymbols.Rounded.Settings,
                     onPreferenceClick = onClickSettings,
                 )
             }
             item {
                 TextPreferenceWidget(
                     title = stringResource(MR.strings.label_support_us),
-                    icon = Icons.Default.VolunteerActivism,
+                    icon = MaterialSymbols.RoundedFilled.VolunteerActivism,
                     onPreferenceClick = onClickSupport,
                 )
             }
             item {
                 TextPreferenceWidget(
                     title = stringResource(MR.strings.pref_category_about),
-                    icon = Icons.Outlined.Info,
+                    icon = MaterialSymbols.Rounded.Info,
                     onPreferenceClick = onClickAbout,
                 )
             }
@@ -243,7 +240,7 @@ fun MoreScreen(
                 item {
                     TextPreferenceWidget(
                         title = stringResource(MR.strings.check_for_updates),
-                        icon = Icons.Outlined.NewReleases,
+                        icon = MaterialSymbols.Rounded.NewReleases,
                         widget = {
                             AnimatedVisibility(visible = isCheckingUpdates) {
                                 CircularProgressIndicator(
@@ -272,7 +269,7 @@ fun MoreScreen(
             item {
                 TextPreferenceWidget(
                     title = stringResource(MR.strings.label_help),
-                    icon = Icons.AutoMirrored.Outlined.HelpOutline,
+                    icon = MaterialSymbols.AutoMirroredRounded.Help,
                     onPreferenceClick = { uriHandler.openUri(Constants.URL_HELP) },
                 )
             }
@@ -303,10 +300,10 @@ private suspend fun checkVersion(
     onAvailableUpdate: (GetApplicationRelease.Result.NewUpdate) -> Unit,
     onFinish: () -> Unit,
 ) {
-    val updateChecker = AppUpdateChecker()
-    withUIContext {
+    val updateChecker = context.appGraph.updateChecker
+    withContext(Dispatchers.Main) {
         try {
-            when (val result = withIOContext { updateChecker.checkForUpdate(context, forceCheck = true) }) {
+            when (val result = updateChecker.checkForUpdate(forceCheck = true)) {
                 is GetApplicationRelease.Result.NewUpdate -> {
                     onAvailableUpdate(result)
                 }

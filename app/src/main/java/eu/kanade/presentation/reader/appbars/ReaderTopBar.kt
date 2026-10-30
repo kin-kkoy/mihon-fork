@@ -9,12 +9,6 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Public
-import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -48,6 +42,12 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.manga.components.SplitColorIcon
 import eu.kanade.tachiyomi.R
+import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.Add
+import mihon.icons.materialsymbols.rounded.Keep
+import mihon.icons.materialsymbols.rounded.MenuBook
+import mihon.icons.materialsymbols.rounded.Public
+import mihon.icons.materialsymbols.roundedfilled.Bookmark
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
@@ -270,12 +270,12 @@ private fun BookmarkPinMenu(
         fun Item(section: PinSection) {
             DropdownMenuItem(
                 text = { Text(section.name) },
-                leadingIcon = { Icon(Icons.Filled.Bookmark, null, tint = Color(section.color)) },
+                leadingIcon = { Icon(MaterialSymbols.RoundedFilled.Bookmark, null, tint = Color(section.color)) },
                 trailingIcon = { Checkbox(checked = section.id in pinnedIds, onCheckedChange = null) },
                 onClick = { onToggleSection(section.id) },
             )
         }
-        Header(Icons.AutoMirrored.Outlined.MenuBook, "THIS ENTRY")
+        Header(MaterialSymbols.Rounded.MenuBook, "THIS ENTRY")
         own.forEach { Item(it) }
         if (own.isEmpty()) {
             Text(
@@ -285,17 +285,17 @@ private fun BookmarkPinMenu(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
-        Header(Icons.Outlined.Public, "ALL ENTRIES")
+        Header(MaterialSymbols.Rounded.Public, "ALL ENTRIES")
         shared.forEach { Item(it) }
         DropdownMenuItem(
             text = { Text("New section…") },
-            leadingIcon = { Icon(Icons.Outlined.Add, null) },
+            leadingIcon = { Icon(MaterialSymbols.Rounded.Add, null) },
             onClick = onNewSection,
         )
         if (pinnedIds.isNotEmpty()) {
             DropdownMenuItem(
                 text = { Text(if (pinnedIds.size > 1) "Unpin from all (keep bookmark)" else "Unpin (keep bookmark)") },
-                leadingIcon = { Icon(Icons.Outlined.PushPin, null) },
+                leadingIcon = { Icon(MaterialSymbols.Rounded.Keep, null) },
                 onClick = onUnpinFromSections,
             )
         }

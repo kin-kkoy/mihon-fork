@@ -17,10 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -47,6 +43,10 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.domain.chapter.service.PinSection
 import kotlinx.coroutines.delay
+import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.Check
+import mihon.icons.materialsymbols.rounded.Close
+import mihon.icons.materialsymbols.roundedfilled.Bookmark
 
 /**
  * "Pin to sections" sheet: tick (or create / manage) sections, add an optional note,
@@ -226,7 +226,12 @@ internal fun SectionOption(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Icon(Icons.Filled.Bookmark, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+        Icon(
+            imageVector = MaterialSymbols.RoundedFilled.Bookmark,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(18.dp),
+        )
         Text(text = section.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         if (count != null) {
             Text(
@@ -236,7 +241,12 @@ internal fun SectionOption(
             )
         }
         if (selected) {
-            Icon(Icons.Filled.Check, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+            Icon(
+                imageVector = MaterialSymbols.Rounded.Check,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }
@@ -275,7 +285,7 @@ internal fun ManageSectionRow(
             )
             ScopeChip(shared = section.isShared, label = scopeLabel, onClick = onScopeClick)
             IconButton(onClick = onDelete) {
-                Icon(Icons.Outlined.Close, contentDescription = "Delete section")
+                Icon(MaterialSymbols.Rounded.Close, contentDescription = "Delete section")
             }
         }
         AnimatedVisibility(visible = colorOpen) {

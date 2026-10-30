@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.base.delegate
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
@@ -8,6 +9,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import dev.zacsweers.metro.Inject
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.ui.security.OtherSideLock
@@ -20,9 +22,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import mihon.app.di.appGraph
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 
 interface SecureActivityDelegate {
     fun registerSecureActivity(activity: AppCompatActivity)
@@ -35,12 +37,12 @@ interface SecureActivityDelegate {
          */
         var requireUnlock = true
 
-        fun onApplicationStopped() {
+        fun onApplicationStopped(context: Context) {
             // OtherSide "Suppress" lock re-lock logic is independent of the whole-app biometric
             // lock and must run even when the biometric authenticator is disabled.
             OtherSideLock.onAppBackgrounded()
 
-            val preferences = Injekt.get<SecurityPreferences>()
+            val preferences = context.appGraph.securityPreferences
             if (!preferences.useAuthenticator.get()) return
 
             if (!AuthenticatorUtil.isAuthenticating) {
@@ -56,7 +58,7 @@ interface SecureActivityDelegate {
         /**
          * Checks if unlock is needed when app comes foreground.
          */
-        fun onApplicationStart() {
+        fun onApplicationStart(context: Context) {
             // Re-lock OtherSide if the configured idle timeout elapsed while backgrounded.
             OtherSideLock.onAppForegrounded()
 
@@ -65,7 +67,7 @@ interface SecureActivityDelegate {
                 RepressManager.refresh()
             }
 
-            val preferences = Injekt.get<SecurityPreferences>()
+            val preferences = context.appGraph.securityPreferences
             if (!preferences.useAuthenticator.get()) return
 
             val lastClosedPref = preferences.lastAppClosed
@@ -92,11 +94,13 @@ class SecureActivityDelegateImpl : SecureActivityDelegate, DefaultLifecycleObser
 
     private lateinit var activity: AppCompatActivity
 
-    private val preferences: BasePreferences by injectLazy()
-    private val securityPreferences: SecurityPreferences by injectLazy()
+    @Inject private lateinit var preferences: BasePreferences
+
+    @Inject private lateinit var securityPreferences: SecurityPreferences
 
     override fun registerSecureActivity(activity: AppCompatActivity) {
         this.activity = activity
+        Injekt.get<Context>().appGraph.inject(this)
         activity.lifecycle.addObserver(this)
     }
 

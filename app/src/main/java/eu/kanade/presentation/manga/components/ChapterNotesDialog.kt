@@ -18,8 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +40,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.chapter.service.ChapterPinStore
+import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.KeyboardArrowDown
 
 /**
  * Reader notes dialog: the note (and the user's presets) is the main part; "Pin to sections"
@@ -193,7 +193,7 @@ fun ChapterNotesDialog(
                             }
                         }
                         Icon(
-                            Icons.Filled.KeyboardArrowDown,
+                            MaterialSymbols.Rounded.KeyboardArrowDown,
                             null,
                             Modifier.rotate(caretRotation),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,

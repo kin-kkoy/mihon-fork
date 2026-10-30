@@ -1,5 +1,8 @@
 package eu.kanade.domain.chapter.service
 
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.decodeFromString
@@ -13,6 +16,8 @@ import tachiyomi.domain.manga.model.Manga
  * chapters out of order) and hidden chapters. Stored as app preferences keyed by
  * [ChapterPinStore.mangaKey], with chapters identified by URL, so it's backed up and restore-safe.
  */
+@Inject
+@SingleIn(AppScope::class)
 class ChapterArrangeStore(preferenceStore: PreferenceStore) {
 
     private val json = Json { ignoreUnknownKeys = true }

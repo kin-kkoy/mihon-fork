@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -35,6 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.chapter.service.PinSection
 import eu.kanade.tachiyomi.ui.manga.PinFilter
+import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.KeyboardArrowDown
+import mihon.icons.materialsymbols.roundedfilled.Bookmark
 
 /**
  * Quick filter chips: All · Bookmarked · one per section. No scrollbar; the row runs off the
@@ -63,7 +63,7 @@ fun PinFilterChipRow(
             selected = filter == PinFilter.Bookmarked,
             onClick = { onFilterChange(PinFilter.Bookmarked) },
             label = { Text("Bookmarked") },
-            leadingIcon = { Icon(Icons.Filled.Bookmark, null, Modifier.size(16.dp)) },
+            leadingIcon = { Icon(MaterialSymbols.RoundedFilled.Bookmark, null, Modifier.size(16.dp)) },
         )
         sections.forEach { section ->
             val color = Color(section.color)
@@ -72,7 +72,9 @@ fun PinFilterChipRow(
                 selected = selected,
                 onClick = { onFilterChange(if (selected) PinFilter.All else PinFilter.Section(section.id)) },
                 label = { Text(section.name) },
-                leadingIcon = { Icon(Icons.Filled.Bookmark, null, Modifier.size(16.dp), tint = color) },
+                leadingIcon = {
+                    Icon(MaterialSymbols.RoundedFilled.Bookmark, null, Modifier.size(16.dp), tint = color)
+                },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = color.copy(alpha = 0.18f),
                     selectedLabelColor = color,
@@ -102,7 +104,7 @@ fun PinSectionHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(Icons.Filled.Bookmark, null, Modifier.size(16.dp), tint = color)
+        Icon(MaterialSymbols.RoundedFilled.Bookmark, null, Modifier.size(16.dp), tint = color)
         Text(
             text = "${section.name.uppercase()} · $count",
             style = MaterialTheme.typography.labelMedium,
@@ -111,7 +113,7 @@ fun PinSectionHeader(
             modifier = Modifier.weight(1f),
         )
         Icon(
-            imageVector = Icons.Filled.KeyboardArrowDown,
+            imageVector = MaterialSymbols.Rounded.KeyboardArrowDown,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.rotate(rotation),
@@ -143,7 +145,7 @@ fun PinSectionsHeader(
             modifier = Modifier.weight(1f),
         )
         Icon(
-            imageVector = Icons.Filled.KeyboardArrowDown,
+            imageVector = MaterialSymbols.Rounded.KeyboardArrowDown,
             contentDescription = if (expanded) "Collapse sections" else "Expand sections",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.rotate(rotation),
@@ -161,9 +163,9 @@ fun SplitBookmarkIcon(
     contentDescription: String?,
     modifier: Modifier = Modifier,
 ) {
-    // The bookmark in Icons.Filled.Bookmark spans x 5..19 of its 24-wide viewport
+    // The bookmark in MaterialSymbols.RoundedFilled.Bookmark spans x 5..19 of its 24-wide viewport
     SplitColorIcon(
-        painter = rememberVectorPainter(Icons.Filled.Bookmark),
+        painter = rememberVectorPainter(MaterialSymbols.RoundedFilled.Bookmark),
         colors = colors.ifEmpty { listOf(MaterialTheme.colorScheme.primary) },
         contentDescription = contentDescription,
         modifier = modifier,

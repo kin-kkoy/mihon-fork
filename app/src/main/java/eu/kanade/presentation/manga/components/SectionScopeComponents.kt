@@ -10,10 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.outlined.ArrowDropDown
-import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -43,6 +39,10 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.domain.chapter.service.PinSection
 import eu.kanade.tachiyomi.util.system.toast
+import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.ArrowDropDown
+import mihon.icons.materialsymbols.rounded.MenuBook
+import mihon.icons.materialsymbols.rounded.Public
 
 /** An entry (manga) a section can belong to: its [ChapterPinStore.mangaKey] and title. */
 data class EntryRef(val key: String, val title: String)
@@ -101,9 +101,9 @@ internal fun SectionPickerList(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        SectionGroupLabel(Icons.AutoMirrored.Outlined.MenuBook, "This entry")
+        SectionGroupLabel(MaterialSymbols.Rounded.MenuBook, "This entry")
         Rows(own, "No sections for this entry yet")
-        SectionGroupLabel(Icons.Outlined.Public, "All entries")
+        SectionGroupLabel(MaterialSymbols.Rounded.Public, "All entries")
         Rows(shared, "No shared sections")
         if (draft.open) {
             NewSectionForm(
@@ -166,13 +166,13 @@ internal fun NewSectionForm(
                     selected = !shared,
                     onClick = { draft.shared = false },
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                    icon = { Icon(Icons.AutoMirrored.Outlined.MenuBook, null, Modifier.size(16.dp)) },
+                    icon = { Icon(MaterialSymbols.Rounded.MenuBook, null, Modifier.size(16.dp)) },
                 ) { Text(if (entries.size == 1) "This entry" else "One entry", maxLines = 1) }
                 SegmentedButton(
                     selected = shared,
                     onClick = { draft.shared = true },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                    icon = { Icon(Icons.Outlined.Public, null, Modifier.size(16.dp)) },
+                    icon = { Icon(MaterialSymbols.Rounded.Public, null, Modifier.size(16.dp)) },
                 ) { Text("All entries", maxLines = 1) }
             }
             if (!shared && entries.size > 1) {
@@ -194,7 +194,7 @@ internal fun NewSectionForm(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f),
                             )
-                            Icon(Icons.Outlined.ArrowDropDown, null)
+                            Icon(MaterialSymbols.Rounded.ArrowDropDown, null)
                         }
                     }
                     DropdownMenu(expanded = pickerOpen, onDismissRequest = { pickerOpen = false }) {
@@ -243,7 +243,7 @@ internal fun ScopeChip(shared: Boolean, label: String, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Icon(
-                imageVector = if (shared) Icons.Outlined.Public else Icons.AutoMirrored.Outlined.MenuBook,
+                imageVector = if (shared) MaterialSymbols.Rounded.Public else MaterialSymbols.Rounded.MenuBook,
                 contentDescription = if (shared) "Shared by all entries" else "This entry only",
                 modifier = Modifier.size(14.dp),
                 tint = if (shared) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,

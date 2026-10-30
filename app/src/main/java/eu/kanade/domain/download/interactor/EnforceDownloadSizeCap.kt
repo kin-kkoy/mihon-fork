@@ -2,25 +2,27 @@ package eu.kanade.domain.download.interactor
 
 import android.content.Context
 import android.text.format.Formatter
+import dev.zacsweers.metro.Inject
 import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.DownloadProvider
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.util.system.notify
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import tachiyomi.core.common.storage.recursiveSize
-import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.download.service.DownloadPreferences
+import tachiyomi.domain.history.interactor.GetHistory
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.storage.service.StorageManager
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import kotlin.time.Instant
 
 /**
  * Enforces the user-configured maximum total download size. When the downloads
@@ -28,6 +30,7 @@ import uy.kohesive.injekt.api.get
  * deleted until the total is back under the cap. Unread chapters are never
  * touched, so nothing you still intend to read is lost. Pinned chapters are never evicted.
  */
+@Inject
 class EnforceDownloadSizeCap(
     private val context: Context,
     private val downloadPreferences: DownloadPreferences,
@@ -37,16 +40,17 @@ class EnforceDownloadSizeCap(
     private val downloadProvider: DownloadProvider,
     private val downloadManager: DownloadManager,
     private val sourceManager: SourceManager,
-    private val chapterPinStore: ChapterPinStore = Injekt.get(),
+    private val chapterPinStore: ChapterPinStore,
+    private val getHistory: GetHistory,
 ) {
 
-    suspend fun await() = withIOContext {
+    suspend fun await() = withContext(Dispatchers.IO) {
         val cap = downloadPreferences.maxDownloadSizeBytes.get()
-        if (cap <= 0L) return@withIOContext
+        if (cap <= 0L) return@withContext
 
-        val downloadsDir = storageManager.getDownloadsDirectory() ?: return@withIOContext
+        val downloadsDir = storageManager.getDownloadsDirectory() ?: return@withContext
         var total = downloadsDir.recursiveSize()
-        if (total <= cap) return@withIOContext
+        if (total <= cap) return@withContext
 
         // Collect every already-read, downloaded chapter as an eviction candidate.
         val candidates = mutableListOf<Candidate>()
@@ -56,6 +60,9 @@ class EnforceDownloadSizeCap(
         getLibraryManga.await().forEach { libraryManga ->
             val manga = libraryManga.manga
             val source = sourceManager.getOrStub(manga.source)
+            val lastReadAt = getHistory.await(manga.id)
+                .mapNotNull { history -> history.readAt?.let { history.chapterId to it } }
+                .toMap()
             getChaptersByMangaId.await(manga.id)
                 .asSequence()
                 .filter { it.read }
@@ -69,12 +76,19 @@ class EnforceDownloadSizeCap(
                         manga.title,
                         source,
                     ) ?: return@forEach
-                    candidates += Candidate(chapter, manga, source, dir.recursiveSize())
+                    candidates += Candidate(
+                        chapter = chapter,
+                        manga = manga,
+                        source = source,
+                        size = dir.recursiveSize(),
+                        // Chapters marked read without opening them have no history; treat them as oldest.
+                        lastReadAt = lastReadAt[chapter.id] ?: Instant.DISTANT_PAST,
+                    )
                 }
         }
 
-        // Oldest first, so recently-read chapters survive longest.
-        candidates.sortBy { it.chapter.lastModifiedAt }
+        // Least recently read first (fetch date as tie-breaker), so recently-read chapters survive longest.
+        candidates.sortWith(compareBy<Candidate>({ it.lastReadAt }, { it.chapter.dateFetch }))
 
         var evicted = 0
         for (candidate in candidates) {
@@ -113,5 +127,6 @@ class EnforceDownloadSizeCap(
         val manga: Manga,
         val source: eu.kanade.tachiyomi.source.Source,
         val size: Long,
+        val lastReadAt: Instant,
     )
 }

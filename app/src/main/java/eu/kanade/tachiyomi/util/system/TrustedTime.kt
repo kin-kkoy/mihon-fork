@@ -1,8 +1,9 @@
 package eu.kanade.tachiyomi.util.system
 
 import eu.kanade.tachiyomi.network.NetworkHelper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.Request
-import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -28,7 +29,7 @@ object TrustedTime {
      * or null if every host fails (offline / blocked). A null result means "unknown" and callers
      * must fail closed (stay repressed).
      */
-    suspend fun nowMillis(): Long? = withIOContext {
+    suspend fun nowMillis(): Long? = withContext(Dispatchers.IO) {
         // Use a short-timeout client so an unreachable host doesn't hang the whole check.
         val client = Injekt.get<NetworkHelper>().client.newBuilder()
             .connectTimeout(5, TimeUnit.SECONDS)
@@ -42,7 +43,7 @@ object TrustedTime {
                 client.newCall(request).execute().use { response ->
                     val date = response.headers.getDate("Date")
                     if (date != null) {
-                        return@withIOContext date.time
+                        return@withContext date.time
                     }
                 }
             } catch (e: Exception) {

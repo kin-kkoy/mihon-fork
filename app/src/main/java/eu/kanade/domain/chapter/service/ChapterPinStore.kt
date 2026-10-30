@@ -1,5 +1,8 @@
 package eu.kanade.domain.chapter.service
 
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
@@ -52,6 +55,8 @@ data class ResolvedPin(val sections: List<PinSection>, val note: String) {
  * included in backups without a DB migration). Pins are keyed by source + manga URL +
  * chapter URL rather than by database id, so they survive a backup restore.
  */
+@Inject
+@SingleIn(AppScope::class)
 class ChapterPinStore(preferenceStore: PreferenceStore) {
 
     private val json = Json { ignoreUnknownKeys = true }

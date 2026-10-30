@@ -12,30 +12,35 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.ContributesIntoMap
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.binding
+import dev.zacsweers.metrox.viewmodel.ViewModelKey
+import dev.zacsweers.metrox.viewmodel.metroViewModel
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.util.storage.DiskUtil
 import eu.kanade.tachiyomi.util.system.toast
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tachiyomi.core.common.storage.recursiveSize
-import tachiyomi.core.common.util.lang.withIOContext
-import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.domain.storage.service.StorageManager
 import tachiyomi.presentation.core.components.material.TextButton
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.util.secondaryItemAlpha
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.File
 
 /**
@@ -73,15 +78,39 @@ data class StorageBucketSize(
 }
 
 /**
- * Reusable storage size computation and clear logic shared by the settings breakdown.
+ * Storage size computation and clear logic for the settings breakdown.
  */
-object StorageUsage {
+@Inject
+@ViewModelKey
+@ContributesIntoMap(AppScope::class, binding = binding<ViewModel>())
+class StorageUsageViewModel(
+    private val context: Context,
+    private val storageManager: StorageManager,
+    private val downloadCache: DownloadCache,
+    private val chapterCache: ChapterCache,
+) : ViewModel() {
 
-    private val storageManager: StorageManager get() = Injekt.get()
-    private val downloadCache: DownloadCache get() = Injekt.get()
-    private val chapterCache: ChapterCache get() = Injekt.get()
+    /** The bucket sizes, or null while they're being computed. */
+    val buckets: StateFlow<List<StorageBucketSize>?>
+        field = MutableStateFlow<List<StorageBucketSize>?>(null)
 
-    fun computeBuckets(context: Context): List<StorageBucketSize> {
+    init {
+        viewModelScope.launch { refresh() }
+    }
+
+    /**
+     * Clears [bucket], then recomputes every bucket size.
+     */
+    suspend fun clear(bucket: StorageBucket) {
+        withContext(Dispatchers.IO) { clearBucket(bucket) }
+        refresh()
+    }
+
+    private suspend fun refresh() {
+        buckets.value = withContext(Dispatchers.IO) { computeBuckets() }
+    }
+
+    private fun computeBuckets(): List<StorageBucketSize> {
         val downloadsDir = storageManager.getDownloadsDirectory()
         val autoBackupsDir = storageManager.getAutomaticBackupsDirectory()
 
@@ -89,22 +118,22 @@ object StorageUsage {
             StorageBucketSize(StorageBucket.Downloads, downloadsDir?.recursiveSize() ?: 0L),
             StorageBucketSize(
                 StorageBucket.CoverCache,
-                coverCacheDir(context)?.let { DiskUtil.getDirectorySize(it) } ?: 0L,
+                coverCacheDir()?.let { DiskUtil.getDirectorySize(it) } ?: 0L,
             ),
-            StorageBucketSize(StorageBucket.ImageCache, DiskUtil.getDirectorySize(imageCacheDir(context))),
-            StorageBucketSize(StorageBucket.ChapterCache, DiskUtil.getDirectorySize(chapterCacheDir(context))),
+            StorageBucketSize(StorageBucket.ImageCache, DiskUtil.getDirectorySize(imageCacheDir())),
+            StorageBucketSize(StorageBucket.ChapterCache, DiskUtil.getDirectorySize(chapterCacheDir())),
             StorageBucketSize(StorageBucket.AutoBackups, autoBackupsDir?.recursiveSize() ?: 0L),
         )
     }
 
-    fun clear(context: Context, bucket: StorageBucket) {
+    private fun clearBucket(bucket: StorageBucket) {
         when (bucket) {
             StorageBucket.Downloads -> {
                 storageManager.getDownloadsDirectory()?.listFiles()?.forEach { it.delete() }
                 downloadCache.invalidateCache()
             }
-            StorageBucket.CoverCache -> coverCacheDir(context)?.let { deleteContents(it) }
-            StorageBucket.ImageCache -> deleteContents(imageCacheDir(context))
+            StorageBucket.CoverCache -> coverCacheDir()?.let { deleteContents(it) }
+            StorageBucket.ImageCache -> deleteContents(imageCacheDir())
             StorageBucket.ChapterCache -> chapterCache.clear()
             StorageBucket.AutoBackups -> {
                 storageManager.getAutomaticBackupsDirectory()?.listFiles()?.forEach { it.delete() }
@@ -112,11 +141,11 @@ object StorageUsage {
         }
     }
 
-    private fun coverCacheDir(context: Context): File? = context.getExternalFilesDir("covers")
+    private fun coverCacheDir(): File? = context.getExternalFilesDir("covers")
 
-    private fun imageCacheDir(context: Context): File = File(context.cacheDir, "image_cache")
+    private fun imageCacheDir(): File = File(context.cacheDir, "image_cache")
 
-    private fun chapterCacheDir(context: Context): File = File(context.cacheDir, "chapter_disk_cache")
+    private fun chapterCacheDir(): File = File(context.cacheDir, "chapter_disk_cache")
 
     private fun deleteContents(dir: File) {
         dir.listFiles()?.forEach { it.deleteRecursively() }
@@ -133,12 +162,8 @@ fun StorageUsageBreakdown(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var buckets by remember { mutableStateOf<List<StorageBucketSize>?>(null) }
-
-    LaunchedEffect(Unit) {
-        val result = withIOContext { StorageUsage.computeBuckets(context) }
-        withUIContext { buckets = result }
-    }
+    val viewModel = metroViewModel<StorageUsageViewModel>()
+    val buckets by viewModel.buckets.collectAsStateWithLifecycle()
 
     val current = buckets
     if (current == null) {
@@ -164,10 +189,8 @@ fun StorageUsageBreakdown(
                 sizeText = Formatter.formatFileSize(context, bucket.size),
                 onClear = {
                     scope.launch {
-                        withIOContext { StorageUsage.clear(context, bucket.type) }
-                        withUIContext { context.toast("Cleared ${bucket.label}") }
-                        val result = withIOContext { StorageUsage.computeBuckets(context) }
-                        withUIContext { buckets = result }
+                        viewModel.clear(bucket.type)
+                        context.toast("Cleared ${bucket.label}")
                     }
                 },
             )

@@ -4,10 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.FilterList
-import androidx.compose.material.icons.outlined.FlipToBack
-import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -28,6 +24,10 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.SearchToolbar
 import eu.kanade.tachiyomi.R
+import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.FilterList
+import mihon.icons.materialsymbols.rounded.FlipToBack
+import mihon.icons.materialsymbols.rounded.SelectAll
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.Pill
 import tachiyomi.presentation.core.i18n.stringResource
@@ -152,7 +152,7 @@ private fun LibraryRegularToolbar(
                 listOf(
                     AppBar.Action(
                         title = stringResource(MR.strings.action_filter),
-                        icon = Icons.Outlined.FilterList,
+                        icon = MaterialSymbols.Rounded.FilterList,
                         iconTint = filterTint,
                         onClick = onClickFilter,
                     ),
@@ -189,12 +189,12 @@ private fun LibrarySelectionToolbar(
                 listOf(
                     AppBar.Action(
                         title = stringResource(MR.strings.action_select_all),
-                        icon = Icons.Outlined.SelectAll,
+                        icon = MaterialSymbols.Rounded.SelectAll,
                         onClick = onClickSelectAll,
                     ),
                     AppBar.Action(
                         title = stringResource(MR.strings.action_select_inverse),
-                        icon = Icons.Outlined.FlipToBack,
+                        icon = MaterialSymbols.Rounded.FlipToBack,
                         onClick = onClickInvertSelection,
                     ),
                 ),

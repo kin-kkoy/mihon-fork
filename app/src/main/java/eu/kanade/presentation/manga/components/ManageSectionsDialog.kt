@@ -4,9 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -16,6 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.domain.chapter.service.PinSection
+import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.MenuBook
+import mihon.icons.materialsymbols.rounded.Public
 
 /**
  * Rename, recolor, change scope, delete and add sections, across entries. Only [sections] are
@@ -66,9 +66,9 @@ fun ManageSectionsDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                SectionGroupLabel(Icons.Outlined.Public, "All entries")
+                SectionGroupLabel(MaterialSymbols.Rounded.Public, "All entries")
                 Rows(sections.filter { it.isShared })
-                SectionGroupLabel(Icons.AutoMirrored.Outlined.MenuBook, "Entry sections")
+                SectionGroupLabel(MaterialSymbols.Rounded.MenuBook, "Entry sections")
                 Rows(sections.filterNot { it.isShared })
                 if (draft.open) {
                     NewSectionForm(draft = draft, entries = entries, onAdd = { draft.commit() })

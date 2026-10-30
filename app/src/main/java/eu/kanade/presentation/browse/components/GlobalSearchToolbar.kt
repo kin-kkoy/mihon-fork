@@ -15,11 +15,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowDropDown
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.FilterList
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.FilterChip
@@ -47,6 +42,11 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.components.SearchToolbar
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.util.system.LocaleHelper
+import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.ArrowDropDown
+import mihon.icons.materialsymbols.rounded.Close
+import mihon.icons.materialsymbols.rounded.FilterList
+import mihon.icons.materialsymbols.rounded.Search
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
@@ -93,13 +93,14 @@ fun GlobalSearchToolbar(
             modifier = Modifier
                 .padding(horizontal = MaterialTheme.padding.small),
             horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             FilterChip(
                 selected = onlyShowHasResults,
                 onClick = { onToggleResults() },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Outlined.FilterList,
+                        imageVector = MaterialSymbols.Rounded.FilterList,
                         contentDescription = null,
                         modifier = Modifier
                             .size(FilterChipDefaults.IconSize),
@@ -141,7 +142,7 @@ private fun SourcePickerButton(
             onClick = { expanded = true },
             trailingIcon = {
                 Icon(
-                    imageVector = Icons.Outlined.ArrowDropDown,
+                    imageVector = MaterialSymbols.Rounded.ArrowDropDown,
                     contentDescription = null,
                     modifier = Modifier
                         .size(FilterChipDefaults.IconSize),
@@ -218,7 +219,7 @@ private fun SourcePickerMenu(
                         },
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Close,
+                            imageVector = MaterialSymbols.Rounded.Close,
                             contentDescription = stringResource(MR.strings.action_reset),
                         )
                     }
@@ -248,7 +249,7 @@ private fun SourcePickerMenu(
                 }
                 IconButton(onClick = { searchExpanded = true }) {
                     Icon(
-                        imageVector = Icons.Outlined.Search,
+                        imageVector = MaterialSymbols.Rounded.Search,
                         contentDescription = stringResource(MR.strings.action_search),
                     )
                 }

@@ -29,12 +29,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,9 +52,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.model.rememberScreenModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import dev.zacsweers.metrox.viewmodel.metroViewModel
 import eu.kanade.domain.chapter.service.ChapterPinStore
 import eu.kanade.domain.chapter.service.PinSection
 import eu.kanade.presentation.components.AppBar
@@ -78,6 +72,12 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.security.RepressManager
+import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.Add
+import mihon.icons.materialsymbols.rounded.Edit
+import mihon.icons.materialsymbols.rounded.MenuBook
+import mihon.icons.materialsymbols.rounded.Public
+import mihon.icons.materialsymbols.roundedfilled.Bookmark
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.asMangaCover
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -95,18 +95,18 @@ class PinnedScreen : Screen() {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val context = LocalContext.current
-        val screenModel = rememberScreenModel { PinnedScreenModel() }
-        val state by screenModel.state.collectAsState()
+        val viewModel = metroViewModel<PinnedViewModel>()
+        val state by viewModel.state.collectAsStateWithLifecycle()
 
         val reveal = rememberOtherSideReveal()
         val gate = rememberOtherSideGate()
-        val crossover: () -> Unit = { reveal.crossover(screenModel::toggleOtherSide) }
+        val crossover: () -> Unit = { reveal.crossover(viewModel::toggleOtherSide) }
         val onYinYang: () -> Unit = { if (!state.otherSideMode) gate(crossover) else crossover() }
 
         // null = closed, false = manage, true = manage with the new-section form open
         var manageSections by remember { mutableStateOf<Boolean?>(null) }
 
-        BackHandler(enabled = state.view != PinnedView.Grid) { screenModel.open(PinnedView.Grid) }
+        BackHandler(enabled = state.view != PinnedView.Grid) { viewModel.open(PinnedView.Grid) }
 
         val openReader: (PinnedEntry) -> Unit = {
             context.startActivity(ReaderActivity.newIntent(context, it.manga.id, it.chapter.id))
@@ -125,7 +125,7 @@ class PinnedScreen : Screen() {
                             is PinnedView.Section -> openSection?.name ?: "Pinned"
                         },
                         navigateUp = {
-                            if (view != PinnedView.Grid) screenModel.open(PinnedView.Grid) else navigator.pop()
+                            if (view != PinnedView.Grid) viewModel.open(PinnedView.Grid) else navigator.pop()
                         },
                         actions = {
                             if (view == PinnedView.Grid) {
@@ -146,7 +146,7 @@ class PinnedScreen : Screen() {
                                     )
                                 }
                                 IconButton(onClick = { manageSections = false }) {
-                                    Icon(Icons.Outlined.Edit, contentDescription = "Manage sections")
+                                    Icon(MaterialSymbols.Rounded.Edit, contentDescription = "Manage sections")
                                 }
                             }
                         },
@@ -159,8 +159,8 @@ class PinnedScreen : Screen() {
                     view == PinnedView.Grid -> PinnedGrid(
                         state = state,
                         contentPadding = paddingValues,
-                        onOpen = screenModel::open,
-                        onToggleEntry = screenModel::toggleEntryFilter,
+                        onOpen = viewModel::open,
+                        onToggleEntry = viewModel::toggleEntryFilter,
                         onNewSection = { manageSections = true },
                     )
                     else -> {
@@ -172,7 +172,7 @@ class PinnedScreen : Screen() {
                             EmptyScreen(message = "No chapters here yet", modifier = Modifier.padding(paddingValues))
                         } else {
                             LazyColumn(contentPadding = paddingValues) {
-                                item { EntryFilterRow(state, screenModel::toggleEntryFilter) }
+                                item { EntryFilterRow(state, viewModel::toggleEntryFilter) }
                                 items(entries, key = { "${it.manga.id}-${it.chapter.id}" }) { entry ->
                                     PinnedRow(
                                         entry = entry,
@@ -190,7 +190,7 @@ class PinnedScreen : Screen() {
 
         manageSections?.let { startAdding ->
             ManageSectionsDialog(
-                store = screenModel.store,
+                store = viewModel.store,
                 sections = state.visibleSections,
                 entries = state.sideManga.map { EntryRef(ChapterPinStore.mangaKey(it), it.title) },
                 ownerTitle = state::ownerTitle,
@@ -210,7 +210,7 @@ class PinnedScreen : Screen() {
 
 @Composable
 private fun PinnedGrid(
-    state: PinnedScreenModel.State,
+    state: PinnedViewModel.State,
     contentPadding: PaddingValues,
     onOpen: (PinnedView) -> Unit,
     onToggleEntry: (Long?) -> Unit,
@@ -297,7 +297,7 @@ private fun PinnedGrid(
                             verticalArrangement = Arrangement.Center,
                             modifier = Modifier.heightIn(min = 128.dp),
                         ) {
-                            Icon(Icons.Outlined.Add, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Icon(MaterialSymbols.Rounded.Add, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
                                 text = "New section",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -319,7 +319,7 @@ private fun SectionGroupHeader(shared: Boolean, text: String) {
         modifier = Modifier.padding(top = 6.dp),
     ) {
         Icon(
-            imageVector = if (shared) Icons.Outlined.Public else Icons.AutoMirrored.Outlined.MenuBook,
+            imageVector = if (shared) MaterialSymbols.Rounded.Public else MaterialSymbols.Rounded.MenuBook,
             contentDescription = null,
             modifier = Modifier.size(14.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -335,7 +335,7 @@ private fun SectionGroupHeader(shared: Boolean, text: String) {
 
 /** Multi-select manga filter; hidden when only one manga has pins on this side. */
 @Composable
-private fun EntryFilterRow(state: PinnedScreenModel.State, onToggle: (Long?) -> Unit) {
+private fun EntryFilterRow(state: PinnedViewModel.State, onToggle: (Long?) -> Unit) {
     val manga = state.sideManga
     if (manga.size < 2) return
     Row(
@@ -378,7 +378,7 @@ private fun SectionTile(
             Box(Modifier.fillMaxWidth().height(6.dp).background(color))
             Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(Icons.Filled.Bookmark, null, tint = color, modifier = Modifier.size(16.dp))
+                    Icon(MaterialSymbols.RoundedFilled.Bookmark, null, tint = color, modifier = Modifier.size(16.dp))
                     Text(
                         text = name,
                         style = MaterialTheme.typography.titleSmall,
